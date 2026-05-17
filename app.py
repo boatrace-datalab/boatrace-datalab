@@ -338,14 +338,13 @@ with tab1:
         st.subheader("📝 結果を記録する")
         col_r1, col_r2, col_r3 = st.columns(3)
         with col_r1:
-
-        actual_rank_options = {'未記録': -1, '1コース': 1, '2コース': 2, '3コース': 3, '4コース': 4, '5コース': 5, '6コース': 6}
-        actual_rank_label = st.selectbox(
-            "実際の1着コース",
-            list(actual_rank_options.keys()),
-            key='actual_rank_pre'
-        )
-        actual_rank = (actual_rank_label, actual_rank_options[actual_rank_label])
+            actual_rank_options = {'未記録': -1, '1コース': 1, '2コース': 2, '3コース': 3, '4コース': 4, '5コース': 5, '6コース': 6}
+            actual_rank_label = st.selectbox(
+                "実際の1着コース",
+                list(actual_rank_options.keys()),
+                key='actual_rank_pre'
+            )
+            actual_rank = (actual_rank_label, actual_rank_options[actual_rank_label])
 
         with col_r2:
             actual_payout = st.number_input(
