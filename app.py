@@ -577,28 +577,18 @@ with tab4:
                 LIMIT 15
             """, conn)
 
-            # 選手名も取得
-               name_df = pd.read_sql(f"""
-               SELECT DISTINCT racer_name FROM racer_course_stats
-               WHERE racer_no = {racer_no}
-               LIMIT 1
-               """, conn)
-
             if df.empty:
                 st.warning("データが見つかりませんでした。登録番号を確認してください。")
             else:
-                name = name_df.iloc[0]['racer_name'] if not name_df.empty else "不明"
-                st.success(f"### {name}（{racer_no}）· {course}コース1着時の出目TOP15")
-                
                 total = pd.read_sql(f"""
                     SELECT SUM(cnt) as total FROM racer_course_stats
                     WHERE racer_no = {racer_no} AND course = {course}
                 """, conn).iloc[0]['total']
-                
+
+                st.success(f"### 登録番号{racer_no} · {course}コース1着時の出目TOP15")
                 col_a, col_b = st.columns(2)
                 col_a.metric("1着回数", f"{int(total):,}回")
                 col_b.metric("データ件数", f"{len(df)}出目")
-                
                 st.dataframe(df, use_container_width=True, hide_index=True)
 
         except Exception as e:
