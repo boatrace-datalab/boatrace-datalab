@@ -585,7 +585,13 @@ with tab4:
                     WHERE racer_no = {racer_no} AND course = {course}
                 """, conn).iloc[0]['total']
 
-                st.success(f"### 登録番号{racer_no} · {course}コース1着時の出目TOP15")
+                name_df = pd.read_sql(f"""
+                    SELECT DISTINCT racer_name FROM racer_course_stats
+                    WHERE racer_no = {racer_no}
+                    LIMIT 1
+                """, conn)
+                name = name_df.iloc[0]['racer_name'] if not name_df.empty else f"登録番号{racer_no}"
+                st.success(f"### {name}（{racer_no}）· {course}コース1着時の出目TOP15")
                 col_a, col_b = st.columns(2)
                 col_a.metric("1着回数", f"{int(total):,}回")
                 col_b.metric("データ件数", f"{len(df)}出目")
