@@ -551,31 +551,29 @@ with tab3:
 
 # ===== タブ4：選手出目検索 =====
 with tab4:
-    st.subheader("🔍 選手別出目検索")
-    st.caption("各コースの登録番号を入力すると、インコースが1着の時の推奨買い目を表示します")
+    st.subheader("🔍 出走メンバー買い目診断")
+    st.caption("各コースの登録番号を入力すると、注目コースが1着の時の推奨買い目を表示します")
 
-    # 6コース分の登録番号入力
-    st.write("**出走選手を入力（登録番号）**")
+    st.write("**出走選手を入力（登録番号・不明は0のまま）**")
     cols = st.columns(6)
     racer_inputs = {}
     for i, col in enumerate(cols, 1):
         with col:
             val = col.number_input(
-                f"{i}コース", 
-                min_value=0, max_value=9999, 
+                f"{i}コース",
+                min_value=0, max_value=9999,
                 value=0, step=1,
                 key=f"racer_{i}"
             )
-            racer_inputs[i] = val
+            racer_inputs[i] = int(val)
 
-    # インコース選択
     in_course = st.selectbox(
-        "注目コース（何コースが1着になった時の出目を見る？）",
+        "注目コース（何コースが1着になった時の買い目を見る？）",
         [1, 2, 3, 4, 5, 6],
         format_func=lambda x: f"{x}コース"
     )
 
-    if st.button("買い目を調べる", type="primary", key="btn_racer"):
+    if st.button("買い目を診断する", type="primary", key="btn_racer"):
         in_racer = racer_inputs.get(in_course, 0)
         if in_racer == 0:
             st.warning(f"{in_course}コースの登録番号を入力してください")
@@ -584,80 +582,88 @@ with tab4:
             try:
                 # 注目コースの選手名取得
                 name_df = pd.read_sql(f"""
-                    SELECT DISTINCT racer_name FROM racer_course_stats
-                    WHERE racer_no = {in_racer} LIMIT 1
+                    SELECT racer_name FROM racer_place_stats
+                    WHERE racer_no = {in_racer} AND course = {in_course}
+                    LIMIT 1
                 """, conn)
-                name = name_df.iloc[0]['racer_name'] if not name_df.empty else f"登録番号{in_racer}"
+                in_name = name_df.iloc[0]['racer_name'] if not name_df.empty else f"登録{in_racer}"
 
-                # 注目コースの選手が1着の時の出目データ取得
-                df = pd.read_sql(f"""
-                    SELECT rank_2nd, rank_3rd, cnt, pct, avg_pay
-                    FROM racer_course_stats
-                    WHERE racer_no = {in_racer}
-                    AND course = {in_course}
-                    ORDER BY cnt DESC
-                """, conn)
+                st.success(f"### {in_name}（{in_racer}）が{in_course}コース1着の時")
 
-                if df.empty:
-                    st.warning("データが見つかりませんでした。登録番号を確認してください。")
+                # 各コースの選手の2着・3着率を取得
+                other_courses = [c for c in range(1, 7) if c != in_course and racer_inputs.get(c, 0) > 0]
+
+                if len(other_courses) < 2:
+                    st.warning("2コース以上の登録番号を入力してください")
                 else:
-                    total = int(df['cnt'].sum())
-                    st.success(f"### {name}（{in_racer}）· {in_course}コース1着時の推奨買い目")
-                    st.caption(f"過去1着回数：{total:,}回")
-
-                    # 入力された選手の登録番号→コースのマッピング
-                    no_to_course = {v: k for k, v in racer_inputs.items() if v > 0}
-                    no_to_name = {}
-                    for racer_no, course_no in no_to_course.items():
-                        n_df = pd.read_sql(f"""
-                            SELECT DISTINCT racer_name FROM racer_course_stats
-                            WHERE racer_no = {racer_no} LIMIT 1
+                    # 各コースの選手データ取得
+                    course_data = {}
+                    for c in other_courses:
+                        racer_no = racer_inputs[c]
+                        df_p = pd.read_sql(f"""
+                            SELECT racer_name, place2_rate, place3_rate, total_cnt
+                            FROM racer_place_stats
+                            WHERE racer_no = {racer_no} AND course = {c}
+                            LIMIT 1
                         """, conn)
-                        n = n_df.iloc[0]['racer_name'] if not n_df.empty else f"登録{racer_no}"
-                        no_to_name[racer_no] = n
+                        if not df_p.empty:
+                            course_data[c] = {
+                                'racer_no': racer_no,
+                                'name': df_p.iloc[0]['racer_name'],
+                                'place2_rate': df_p.iloc[0]['place2_rate'],
+                                'place3_rate': df_p.iloc[0]['place3_rate'],
+                                'total_cnt': int(df_p.iloc[0]['total_cnt'])
+                            }
+                        else:
+                            course_data[c] = {
+                                'racer_no': racer_no,
+                                'name': f"登録{racer_no}",
+                                'place2_rate': 0,
+                                'place3_rate': 0,
+                                'total_cnt': 0
+                            }
 
-                    # 出目ごとに2着・3着の選手名を付加して表示
-                    st.write("**📊 出目ランキング（実際の出走メンバーに絞り込み）**")
-
-                    results = []
-                    for _, row in df.iterrows():
-                        r2 = int(row['rank_2nd'])
-                        r3 = int(row['rank_3rd'])
-
-                        # 入力メンバーが指定されている場合は絞り込み
-                        input_courses = [k for k, v in racer_inputs.items() if v > 0]
-                        if len(input_courses) > 1:
-                            if r2 not in input_courses or r3 not in input_courses:
-                                continue
-
-                        # 2着・3着の選手名
-                        r2_racer = racer_inputs.get(r2, 0)
-                        r3_racer = racer_inputs.get(r3, 0)
-                        r2_name = no_to_name.get(r2_racer, f"{r2}コース")
-                        r3_name = no_to_name.get(r3_racer, f"{r3}コース")
-
-                        results.append({
-                            '出目': f"{in_course}-{r2}-{r3}",
-                            '2着': f"{r2}({r2_name})",
-                            '3着': f"{r3}({r3_name})",
-                            '件数': int(row['cnt']),
-                            '出現率(%)': row['pct'],
-                            '平均配当(円)': int(row['avg_pay'])
+                    # 選手別2着・3着率を表示
+                    st.write("**各コースの選手成績**")
+                    member_rows = []
+                    for c, d in course_data.items():
+                        member_rows.append({
+                            'コース': f"{c}コース",
+                            '選手名': d['name'],
+                            '登録番号': d['racer_no'],
+                            f'{c}コース2着率': f"{d['place2_rate']}%",
+                            f'{c}コース3着率': f"{d['place3_rate']}%",
                         })
+                    member_df = pd.DataFrame(member_rows)
+                    st.dataframe(member_df, use_container_width=True, hide_index=True)
 
-                    if results:
-                        result_df = pd.DataFrame(results)
-                        st.dataframe(result_df, use_container_width=True, hide_index=True)
+                    # 2着×3着の組み合わせスコアを計算
+                    st.write("**🎯 推奨買い目（2着×3着の出現確率順）**")
+                    combos = []
+                    for c2 in other_courses:
+                        for c3 in other_courses:
+                            if c2 == c3:
+                                continue
+                            d2 = course_data[c2]
+                            d3 = course_data[c3]
+                            score = d2['place2_rate'] * d3['place3_rate']
+                            combos.append({
+                                '出目': f"{in_course}-{c2}-{c3}",
+                                '2着': f"{c2}({d2['name']})",
+                                '3着': f"{c3}({d3['name']})",
+                                '2着率': f"{d2['place2_rate']}%",
+                                '3着率': f"{d3['place3_rate']}%",
+                                'スコア': round(score, 1)
+                            })
 
-                        # 推奨買い目TOP3
-                        st.write("**🎯 推奨買い目TOP3**")
-                        for i, r in enumerate(results[:3], 1):
-                            st.info(f"{i}位：{r['出目']} （出現率{r['出現率(%)']}%・平均配当{r['平均配当(円)']:,}円）")
-                    else:
-                        # メンバー絞り込みなしで全出目表示
-                        st.write("※入力メンバーでの絞り込み結果なし。全出目を表示します")
-                        df.columns = ['2着コース','3着コース','件数','出現率(%)','平均配当(円)']
-                        st.dataframe(df.head(15), use_container_width=True, hide_index=True)
+                    combos = sorted(combos, key=lambda x: x['スコア'], reverse=True)
+                    combo_df = pd.DataFrame(combos[:10])
+                    st.dataframe(combo_df, use_container_width=True, hide_index=True)
+
+                    # TOP3をハイライト
+                    st.write("**🏆 特に注目の買い目**")
+                    for i, c in enumerate(combos[:3], 1):
+                        st.info(f"{i}位：{c['出目']}　2着率{c['2着率']} × 3着率{c['3着率']}")
 
             except Exception as e:
                 st.error(f"エラー：{e}")
