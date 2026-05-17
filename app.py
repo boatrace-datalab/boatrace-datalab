@@ -259,7 +259,7 @@ st.title("🚤 ボートレース レース判定ツール")
 st.caption("30万件のデータに基づくレース判定ツール")
 
 # タブ
-tab1, tab2, tab3 = st.tabs(["📋 レース前判定", "⚡ レース直前判定", "📊 成績ダッシュボード"])
+tab1, tab2, tab3 = st.tabs(["📋 レース前判定","⚡ レース直前判定","📊 成績ダッシュボード","🔍 選手出目検索"])
 
 # ===== タブ1：レース前判定 =====
 with tab1:
@@ -545,6 +545,62 @@ with tab3:
     except Exception as e:
         st.error(f"DBに接続できません。boatrace.dbのパスを確認してください。\n{e}")
 
+# ===== タブ4：選手出目検索 =====
+with tab4:
+    st.subheader("🔍 選手別出目検索")
+    st.caption("登録番号とコースを入力すると、そのコースで1着になった時の出目を表示します")
+
+    col1, col2 = st.columns(2)
+    with col1:
+        racer_no = st.number_input("選手登録番号", min_value=1000, max_value=9999, value=4320, step=1)
+    with col2:
+        course = st.selectbox("コース", [1, 2, 3, 4, 5, 6], format_func=lambda x: f"{x}コース")
+
+    if st.button("検索", type="primary", key="btn_racer"):
+        conn = sqlite3.connect(DB_PATH)
+        try:
+            df = pd.read_sql(f"""
+                SELECT 
+                    rank_2nd as '2着',
+                    rank_3rd as '3着',
+                    cnt as '件数',
+                    pct as '出現率(%)',
+                    avg_pay as '平均配当(円)'
+                FROM racer_course_stats
+                WHERE racer_no = {racer_no}
+                AND course = {course}
+                ORDER BY cnt DESC
+                LIMIT 15
+            """, conn)
+
+            # 選手名も取得
+            name_df = pd.read_sql(f"""
+                SELECT DISTINCT racer_name FROM entry
+                WHERE racer_no = {racer_no}
+                LIMIT 1
+            """, conn)
+
+            if df.empty:
+                st.warning("データが見つかりませんでした。登録番号を確認してください。")
+            else:
+                name = name_df.iloc[0]['racer_name'] if not name_df.empty else "不明"
+                st.success(f"### {name}（{racer_no}）· {course}コース1着時の出目TOP15")
+                
+                total = pd.read_sql(f"""
+                    SELECT SUM(cnt) as total FROM racer_course_stats
+                    WHERE racer_no = {racer_no} AND course = {course}
+                """, conn).iloc[0]['total']
+                
+                col_a, col_b = st.columns(2)
+                col_a.metric("1着回数", f"{int(total):,}回")
+                col_b.metric("データ件数", f"{len(df)}出目")
+                
+                st.dataframe(df, use_container_width=True, hide_index=True)
+
+        except Exception as e:
+            st.error(f"エラー：{e}")
+        finally:
+            conn.close()
 # フッター
 st.divider()
 st.caption("© 2026 ボートレース判定ツール | データ：2018〜2026年 約31万件")
