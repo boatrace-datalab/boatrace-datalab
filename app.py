@@ -622,7 +622,6 @@ with tab4:
                                 'place3_rate': 0,
                                 'total_cnt': 0
                             }
-
                     # 選手別2着・3着率を表示
                     st.write("**各コースの選手成績**")
                     member_rows = []
@@ -631,8 +630,8 @@ with tab4:
                             'コース': f"{c}コース",
                             '選手名': d['name'],
                             '登録番号': d['racer_no'],
-                            f'{c}コース2着率': f"{d['place2_rate']}%",
-                            f'{c}コース3着率': f"{d['place3_rate']}%",
+                            '2着率': f"{d['place2_rate']}%",
+                            '3着率': f"{d['place3_rate']}%",
                         })
                     member_df = pd.DataFrame(member_rows)
                     st.dataframe(member_df, use_container_width=True, hide_index=True)
