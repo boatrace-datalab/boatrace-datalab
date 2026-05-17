@@ -578,11 +578,11 @@ with tab4:
             """, conn)
 
             # 選手名も取得
-            name_df = pd.read_sql(f"""
-                SELECT DISTINCT racer_name FROM entry
-                WHERE racer_no = {racer_no}
-                LIMIT 1
-            """, conn)
+               name_df = pd.read_sql(f"""
+               SELECT DISTINCT racer_name FROM racer_course_stats
+               WHERE racer_no = {racer_no}
+               LIMIT 1
+               """, conn)
 
             if df.empty:
                 st.warning("データが見つかりませんでした。登録番号を確認してください。")
