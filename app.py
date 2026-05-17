@@ -10,7 +10,43 @@ import os
 
 # ===== 設定 =====
 # DBのパスは環境に合わせて変更してください
-DB_PATH = "boatrace.db"
+DB_PATH = "boatrace_light3.db"
+def init_db():
+    conn = sqlite3.connect(DB_PATH)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS judgment_log (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            log_date TEXT,
+            venue_name TEXT,
+            race_no INTEGER,
+            wind_direction TEXT,
+            wind_speed REAL,
+            wave_height INTEGER,
+            wind_type TEXT,
+            in_grade TEXT,
+            motor_rate REAL,
+            is_local INTEGER,
+            grade_code TEXT,
+            st_timing REAL,
+            st_rank INTEGER,
+            mode TEXT,
+            judgment TEXT,
+            score INTEGER,
+            pred_mansen REAL,
+            in_win_rate REAL,
+            adjusted_in REAL,
+            actual_rank1st INTEGER,
+            actual_mansen INTEGER,
+            actual_payout INTEGER,
+            is_correct INTEGER,
+            memo TEXT,
+            created_at TEXT
+        )
+    """)
+    conn.commit()
+    conn.close()
+
+init_db()
 
 # ===== 定数 =====
 VENUE_LIST = [
