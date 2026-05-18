@@ -737,9 +737,23 @@ with tab5:
         with col4:
             year_to = st.selectbox("終了年", list(range(2015, 2027)), index=11, key="year_to")
 
+        selected_grades = st.multiselect(
+            "レースグレード（複数選択可・未選択で全て対象）",
+            ['IC', 'G3', 'G2', 'G1', 'SG'],
+            default=[],
+            key="search_grade"
+        )
+
         if st.button("検索", type="primary", key="btn_search"):
             conn = sqlite3.connect(DB_PATH)
             try:
+                # グレード条件
+                if selected_grades:
+                    grade_in = ','.join([f"'{g}'" for g in selected_grades])
+                    grade_condition = f"AND rc.grade_code IN ({grade_in})"
+                else:
+                    grade_condition = ""
+
                 # 対象レース数確認
                 df_count = pd.read_sql(f"""
                     SELECT 
@@ -752,13 +766,15 @@ with tab5:
                     WHERE rc.venue_id = {venue_id}
                     AND rc.race_no = {race_no}
                     AND CAST(strftime('%Y', rc.race_date) AS INTEGER) BETWEEN {year_from} AND {year_to}
+                    {grade_condition}
                 """, conn)
 
                 total = int(df_count.iloc[0]['総レース数'])
                 if total == 0:
                     st.warning("該当するレースが見つかりませんでした。")
                 else:
-                    st.write(f"**対象レース数：{total:,}件**")
+                    grade_label = '・'.join(selected_grades) if selected_grades else '全グレード'
+                    st.write(f"**対象レース数：{total:,}件**（{selected_venue}・{race_no}R・{year_from}〜{year_to}年・{grade_label}）")
                     col_a, col_b, col_c = st.columns(3)
                     col_a.metric("イン着率", f"{df_count.iloc[0]['イン着率']}%")
                     col_b.metric("万舟率", f"{df_count.iloc[0]['万舟率']}%")
@@ -780,6 +796,7 @@ with tab5:
                         WHERE rc.venue_id = {venue_id}
                         AND rc.race_no = {race_no}
                         AND CAST(strftime('%Y', rc.race_date) AS INTEGER) BETWEEN {year_from} AND {year_to}
+                        {grade_condition}
                         GROUP BY rc.in_grade
                         ORDER BY 件数 DESC
                     """, conn)
@@ -803,6 +820,7 @@ with tab5:
                         WHERE rc.venue_id = {venue_id}
                         AND rc.race_no = {race_no}
                         AND CAST(strftime('%Y', rc.race_date) AS INTEGER) BETWEEN {year_from} AND {year_to}
+                        {grade_condition}
                         GROUP BY r.rank_1st, r.rank_2nd, r.rank_3rd
                         ORDER BY 件数 DESC
                         LIMIT 20
