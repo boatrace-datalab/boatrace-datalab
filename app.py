@@ -259,11 +259,12 @@ st.title("🚤 ボートレース レース判定ツール")
 st.caption("30万件のデータに基づくレース判定ツール")
 
 # タブ
-tab1, tab2, tab3, tab4 = st.tabs([
+tab1, tab2, tab3, tab4, tab5 = st.tabs([
     "📋 レース前判定",
-    "⚡ レース直前判定", 
+    "⚡ レース直前判定",
     "📊 成績ダッシュボード",
-    "🔍 選手出目検索"
+    "🔍 出走メンバー診断",
+    "🔎 レース条件検索"
 ])
 # ===== タブ1：レース前判定 =====
 with tab1:
@@ -691,6 +692,131 @@ with tab4:
                 st.error(f"エラー：{e}")
             finally:
                 conn.close()
+# ===== タブ5：レース条件検索（有料） =====
+with tab5:
+    st.subheader("🔎 レース条件検索")
+    st.caption("場・レース番号・期間を指定して出目を分析します")
+
+    # パスワード認証
+    if 'authenticated' not in st.session_state:
+        st.session_state.authenticated = False
+
+    if not st.session_state.authenticated:
+        st.info("🔒 この機能はサブスクリプション会員限定です")
+        pw = st.text_input("パスワードを入力してください", type="password", key="pw_input")
+        if st.button("認証する", key="btn_auth"):
+            try:
+                correct_pw = st.secrets["PASSWORD"]
+            except:
+                correct_pw = "boat2605"
+            if pw == correct_pw:
+                st.session_state.authenticated = True
+                st.rerun()
+            else:
+                st.error("パスワードが違います")
+        st.markdown("---")
+        st.caption("パスワードはnoteサブスクリプション会員向け記事に記載しています")
+        st.caption("👉 https://note.com/boatrace_datalab")
+    else:
+        # 認証済みの場合は検索UIを表示
+        st.success("✅ 認証済み")
+
+        col1, col2 = st.columns(2)
+        with col1:
+            venue_names = [v[1] for v in VENUE_LIST]
+            selected_venue = st.selectbox("場名", venue_names, key="search_venue")
+            venue_id = [v[0] for v in VENUE_LIST if v[1] == selected_venue][0]
+
+        with col2:
+            race_no = st.selectbox("レース番号", list(range(1, 13)),
+                                   format_func=lambda x: f"{x}R", key="search_race_no")
+
+        col3, col4 = st.columns(2)
+        with col3:
+            year_from = st.selectbox("開始年", list(range(2015, 2027)), index=0, key="year_from")
+        with col4:
+            year_to = st.selectbox("終了年", list(range(2015, 2027)), index=11, key="year_to")
+
+        if st.button("検索", type="primary", key="btn_search"):
+            conn = sqlite3.connect(DB_PATH)
+            try:
+                # 対象レース数確認
+                df_count = pd.read_sql(f"""
+                    SELECT 
+                        COUNT(*) as 総レース数,
+                        ROUND(SUM(CASE WHEN r.rank_1st=1 THEN 1.0 ELSE 0 END)/COUNT(*)*100,1) as イン着率,
+                        ROUND(SUM(r.is_mansen)*100.0/COUNT(*),1) as 万舟率,
+                        ROUND(AVG(r.trifecta_pay),0) as 平均配当
+                    FROM result r
+                    JOIN race rc ON r.race_id = rc.race_id
+                    WHERE rc.venue_id = {venue_id}
+                    AND rc.race_no = {race_no}
+                    AND CAST(strftime('%Y', rc.race_date) AS INTEGER) BETWEEN {year_from} AND {year_to}
+                """, conn)
+
+                total = int(df_count.iloc[0]['総レース数'])
+                if total == 0:
+                    st.warning("該当するレースが見つかりませんでした。")
+                else:
+                    st.write(f"**対象レース数：{total:,}件**")
+                    col_a, col_b, col_c = st.columns(3)
+                    col_a.metric("イン着率", f"{df_count.iloc[0]['イン着率']}%")
+                    col_b.metric("万舟率", f"{df_count.iloc[0]['万舟率']}%")
+                    col_c.metric("平均配当", f"{int(df_count.iloc[0]['平均配当']):,}円")
+
+                    st.divider()
+
+                    # 1号艇等級別内訳
+                    st.write("**1号艇等級別内訳**")
+                    df_grade = pd.read_sql(f"""
+                        SELECT 
+                            rc.in_grade as 等級,
+                            COUNT(*) as 件数,
+                            ROUND(COUNT(*)*100.0/{total},1) as 構成比,
+                            ROUND(SUM(CASE WHEN r.rank_1st=1 THEN 1.0 ELSE 0 END)/COUNT(*)*100,1) as イン着率,
+                            ROUND(SUM(r.is_mansen)*100.0/COUNT(*),1) as 万舟率
+                        FROM result r
+                        JOIN race rc ON r.race_id = rc.race_id
+                        WHERE rc.venue_id = {venue_id}
+                        AND rc.race_no = {race_no}
+                        AND CAST(strftime('%Y', rc.race_date) AS INTEGER) BETWEEN {year_from} AND {year_to}
+                        GROUP BY rc.in_grade
+                        ORDER BY 件数 DESC
+                    """, conn)
+                    st.dataframe(df_grade, use_container_width=True, hide_index=True)
+
+                    st.divider()
+
+                    # 出目ランキング
+                    st.write("**出目ランキングTOP20**")
+                    df_combo = pd.read_sql(f"""
+                        SELECT 
+                            r.rank_1st as '1着',
+                            r.rank_2nd as '2着',
+                            r.rank_3rd as '3着',
+                            COUNT(*) as 件数,
+                            ROUND(COUNT(*)*100.0/{total},1) as '出現率(%)',
+                            ROUND(AVG(r.trifecta_pay),0) as '平均配当(円)',
+                            SUM(r.is_mansen) as 万舟回数
+                        FROM result r
+                        JOIN race rc ON r.race_id = rc.race_id
+                        WHERE rc.venue_id = {venue_id}
+                        AND rc.race_no = {race_no}
+                        AND CAST(strftime('%Y', rc.race_date) AS INTEGER) BETWEEN {year_from} AND {year_to}
+                        GROUP BY r.rank_1st, r.rank_2nd, r.rank_3rd
+                        ORDER BY 件数 DESC
+                        LIMIT 20
+                    """, conn)
+                    st.dataframe(df_combo, use_container_width=True, hide_index=True)
+
+            except Exception as e:
+                st.error(f"エラー：{e}")
+            finally:
+                conn.close()
+
+        if st.button("ログアウト", key="btn_logout"):
+            st.session_state.authenticated = False
+            st.rerun()
 # フッター
 st.divider()
 st.caption("© 2026 ボートレース判定ツール | データ：2018〜2026年 約31万件")
