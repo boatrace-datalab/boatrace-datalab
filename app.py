@@ -610,7 +610,7 @@ with tab4:
                 
                     if df_solo.empty:
                         st.warning("データが見つかりませんでした。")
-    else:
+                    else:
         total = int(df_solo['件数'].sum())
         st.caption(f"※他コースの登録番号が未入力のため、過去の全出目データを表示しています")
         st.caption(f"過去1着回数：{total:,}回")
