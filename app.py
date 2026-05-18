@@ -258,20 +258,33 @@ st.set_page_config(
 st.title("🚤 ボートレース レース判定ツール")
 st.caption("30万件のデータに基づくレース判定ツール")
 
+# サイドバーナビゲーション
+with st.sidebar:
+    st.markdown("### 📌 メニュー")
+    st.markdown("---")
+    page = st.radio(
+        "機能を選択してください",
+        [
+            "📋 レース前判定",
+            "⚡ レース直前判定",
+            "📊 成績ダッシュボード",
+            "🔍 出走メンバー診断",
+            "🔎 レース条件検索",
+        ],
+        label_visibility="collapsed"
+    )
+    st.markdown("---")
+    st.caption("🔎 レース条件検索は\nサブスク会員限定機能です")
+    st.caption("👉 https://note.com/boatrace_datalab")
 
-# タブ
-tab1, tab2, tab3 = st.tabs([
-    "📋 レース前判定",
-    "⚡ レース直前判定",
-    "📊 成績ダッシュボード",
-])
-
-tab4, tab5 = st.tabs([
-    "🔍 出走メンバー診断",
-    "🔎 レース条件検索",
-])
-# ===== タブ1：レース前判定 =====
-with tab1:
+# ページ切り替え用フラグ
+show_tab1 = page == "📋 レース前判定"
+show_tab2 = page == "⚡ レース直前判定"
+show_tab3 = page == "📊 成績ダッシュボード"
+show_tab4 = page == "🔍 出走メンバー診断"
+show_tab5 = page == "🔎 レース条件検索"
+# ===== ページ1：レース前判定 =====
+if show_tab1:
     st.subheader("📋 レース前判定")
     st.caption("出走表が出た時点で使える判定モード")
 
@@ -410,8 +423,8 @@ with tab1:
                 else:
                     st.info("－ 記録しました（普通判定は対象外）")
 
-# ===== タブ2：レース直前判定 =====
-with tab2:
+# ===== ページ2：レース直前判定 =====
+if show_tab2:
     st.subheader("⚡ レース直前判定")
     st.caption("展示後のSTタイミングが出てから使う高精度モード")
 
@@ -475,8 +488,8 @@ with tab2:
             for d in result['details']:
                 st.text(d)
 
-# ===== タブ3：成績ダッシュボード =====
-with tab3:
+# ===== ページ3：成績ダッシュボード =====
+if show_tab3:
     st.subheader("📊 累計成績ダッシュボード")
 
     if st.button("成績を更新", key='refresh'):
@@ -554,8 +567,8 @@ with tab3:
     except Exception as e:
         st.error(f"DBに接続できません。boatrace.dbのパスを確認してください。\n{e}")
 
-# ===== タブ4：選手出目検索 =====
-with tab4:
+# ===== ページ4：出走メンバー診断 =====
+if show_tab4:
     st.subheader("🔍 出走メンバー買い目診断")
     st.caption("各コースの登録番号を入力すると、注目コースが1着の時の推奨買い目を表示します")
 
@@ -696,8 +709,8 @@ with tab4:
                 st.error(f"エラー：{e}")
             finally:
                 conn.close()
-# ===== タブ5：レース条件検索（有料） =====
-with tab5:
+# ===== ページ5：レース条件検索（有料） =====
+if show_tab5:
     st.subheader("🔎 レース条件検索")
     st.caption("場・レース番号・期間を指定して出目を分析します")
 
