@@ -250,13 +250,14 @@ def judge_race(venue_id, wind_direction, wind_speed, wave_height,
 
 # ===== Streamlit UI =====
 st.set_page_config(
-    page_title="ボートレース判定ツール",
+    page_title="ボートレースデータ分析官",
     page_icon="🚤",
     layout="wide"
 )
 
-st.title("🚤 ボートレース レース判定ツール")
-st.caption("30万件のデータに基づくレース判定ツール")
+st.title("🚤 ボートレースデータ分析官")
+st.caption("60万件のデータに基づくレース判定・分析ツール")
+st.info("👈 左上の「>」をタップしてメニューを開いてください")
 
 # サイドバーナビゲーション
 with st.sidebar:
@@ -862,4 +863,4 @@ if show_tab5:
             st.rerun()
 # フッター
 st.divider()
-st.caption("© 2026 ボートレース判定ツール | データ：2018〜2026年 約31万件")
+st.caption("© 2026 ボートレースデータ分析官 | データ：2015〜2026年 約60万件")
