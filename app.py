@@ -594,7 +594,31 @@ with tab4:
                 other_courses = [c for c in range(1, 7) if c != in_course and racer_inputs.get(c, 0) > 0]
 
                 if len(other_courses) < 2:
-                    st.warning("2コース以上の登録番号を入力してください")
+                    df_solo = pd.read_sql(f"""
+                        SELECT 
+                            rank_2nd as '2着コース',
+                            rank_3rd as '3着コース',
+                            cnt as '件数',
+                            pct as '出現率(%)',
+                            avg_pay as '平均配当(円)'
+                        FROM racer_course_stats
+                        WHERE racer_no = {in_racer}
+                        AND course = {in_course}
+                        ORDER BY cnt DESC
+                        LIMIT 15
+                    """, conn)
+                
+                    if df_solo.empty:
+                        st.warning("データが見つかりませんでした。")
+    else:
+        total = int(df_solo['件数'].sum())
+        st.caption(f"※他コースの登録番号が未入力のため、過去の全出目データを表示しています")
+        st.caption(f"過去1着回数：{total:,}回")
+        st.dataframe(df_solo, use_container_width=True, hide_index=True)
+
+        st.write("**🎯 推奨買い目TOP3**")
+        for i, row in enumerate(df_solo.head(3).itertuples(), 1):
+            st.info(f"{i}位：{in_course}-{int(row._1)}-{int(row._2)}　出現率{row._5}%・平均配当{int(row._6):,}円")
                 else:
                     # 各コースの選手データ取得
                     course_data = {}
