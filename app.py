@@ -610,15 +610,15 @@ with tab4:
                 
                     if df_solo.empty:
                         st.warning("データが見つかりませんでした。")
-                    else:
-        total = int(df_solo['件数'].sum())
-        st.caption(f"※他コースの登録番号が未入力のため、過去の全出目データを表示しています")
-        st.caption(f"過去1着回数：{total:,}回")
-        st.dataframe(df_solo, use_container_width=True, hide_index=True)
+                else:
+                	total = int(df_solo['件数'].sum())
+                	st.caption(f"※他コースの登録番号が未入力のため、過去の全出目データを表示しています")
+                	st.caption(f"過去1着回数：{total:,}回")
+                	st.dataframe(df_solo, use_container_width=True, hide_index=True)
 
-        st.write("**🎯 推奨買い目TOP3**")
-        for i, row in enumerate(df_solo.head(3).itertuples(), 1):
-            st.info(f"{i}位：{in_course}-{int(row._1)}-{int(row._2)}　出現率{row._5}%・平均配当{int(row._6):,}円")
+	                st.write("**🎯 推奨買い目TOP3**")
+    	            for i, row in enumerate(df_solo.head(3).itertuples(), 1):
+        	            st.info(f"{i}位：{in_course}-{int(row._1)}-{int(row._2)}　出現率{row._5}%・平均配当{int(row._6):,}円")
                 else:
                     # 各コースの選手データ取得
                     course_data = {}
