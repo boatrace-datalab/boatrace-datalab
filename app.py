@@ -737,9 +737,16 @@ with tab5:
         with col4:
             year_to = st.selectbox("終了年", list(range(2015, 2027)), index=11, key="year_to")
 
-        selected_grades = st.multiselect(
+        GRADE_LABEL_MAP = {
+            'IC(一般戦)': 'IC',
+            'G3': 'G3',
+            'G2': 'G2',
+            'G1': 'G1',
+            'SG': 'SG',
+        }
+        selected_grade_labels = st.multiselect(
             "レースグレード（複数選択可・未選択で全て対象）",
-            ['IC', 'G3', 'G2', 'G1', 'SG'],
+            list(GRADE_LABEL_MAP.keys()),
             default=[],
             key="search_grade"
         )
@@ -747,7 +754,8 @@ with tab5:
         if st.button("検索", type="primary", key="btn_search"):
             conn = sqlite3.connect(DB_PATH)
             try:
-                # グレード条件
+                # グレード条件（表示名→DB値に変換）
+                selected_grades = [GRADE_LABEL_MAP[g] for g in selected_grade_labels]
                 if selected_grades:
                     grade_in = ','.join([f"'{g}'" for g in selected_grades])
                     grade_condition = f"AND rc.grade_code IN ({grade_in})"
@@ -773,7 +781,7 @@ with tab5:
                 if total == 0:
                     st.warning("該当するレースが見つかりませんでした。")
                 else:
-                    grade_label = '・'.join(selected_grades) if selected_grades else '全グレード'
+                    grade_label = '・'.join(selected_grade_labels) if selected_grade_labels else '全グレード'
                     st.write(f"**対象レース数：{total:,}件**（{selected_venue}・{race_no}R・{year_from}〜{year_to}年・{grade_label}）")
                     col_a, col_b, col_c = st.columns(3)
                     col_a.metric("イン着率", f"{df_count.iloc[0]['イン着率']}%")
