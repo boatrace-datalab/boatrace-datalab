@@ -255,6 +255,7 @@ st.set_page_config(
     layout="wide"
 )
 
+st.image("header.jpeg", use_container_width=True)
 st.title("🚤 ボートレースデータ分析官")
 st.caption("60万件のデータに基づくレース判定・分析ツール")
 st.info("👈 左上の「>」をタップしてメニューを開いてください")
