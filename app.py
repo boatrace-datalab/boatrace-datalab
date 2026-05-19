@@ -7,10 +7,64 @@ import streamlit as st
 import sqlite3
 import pandas as pd
 import os
+import gspread
+from google.oauth2.service_account import Credentials
+from datetime import datetime
 
 # ===== 設定 =====
 # DBのパスは環境に合わせて変更してください
 DB_PATH = "boatrace_light3.db"
+# ===== Google Sheets ログ関数 =====
+def get_gs_client():
+    try:
+        creds = Credentials.from_service_account_info(
+            st.secrets["gcp_service_account"],
+            scopes=[
+                "https://spreadsheets.google.com/feeds",
+                "https://www.googleapis.com/auth/drive"
+            ]
+        )
+        return gspread.authorize(creds)
+    except:
+        return None
+
+def log_access(page_name):
+    try:
+        gc = get_gs_client()
+        if gc is None:
+            return
+        sh = gc.open_by_key(st.secrets["SPREADSHEET_ID"])
+        ws = sh.worksheet("access_log")
+        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        ws.append_row([now, page_name])
+    except:
+        pass
+
+def log_search(venue, race_no, year_from, year_to, grades):
+    try:
+        gc = get_gs_client()
+        if gc is None:
+            return
+        sh = gc.open_by_key(st.secrets["SPREADSHEET_ID"])
+        ws = sh.worksheet("search_log")
+        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        ws.append_row([now, venue, race_no, year_from, year_to, ','.join(grades) if grades else '全て'])
+    except:
+        pass
+
+def log_auth(success, ip_hint=""):
+    try:
+        gc = get_gs_client()
+        if gc is None:
+            return
+        sh = gc.open_by_key(st.secrets["SPREADSHEET_ID"])
+        ws = sh.worksheet("auth_log")
+        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        status = "成功" if success else "失敗"
+        ws.append_row([now, status])
+    except:
+        pass
+
 def init_db():
     conn = sqlite3.connect(DB_PATH)
     conn.execute("""
@@ -290,6 +344,11 @@ show_tab2 = page == "⚡ レース直前判定"
 show_tab3 = page == "📊 成績ダッシュボード"
 show_tab4 = page == "🔍 出走メンバー診断"
 show_tab5 = page == "🔎 レース条件検索"
+
+# アクセスログ記録
+if 'last_page' not in st.session_state or st.session_state.last_page != page:
+    log_access(page)
+    st.session_state.last_page = page
 # ===== ページ1：レース前判定 =====
 if show_tab1:
     st.subheader("📋 レース前判定")
@@ -735,8 +794,10 @@ if show_tab5:
                 correct_pw = "boat2605"
             if pw == correct_pw:
                 st.session_state.authenticated = True
+                log_auth(True)
                 st.rerun()
             else:
+                log_auth(False)
                 st.error("パスワードが違います")
         st.markdown("---")
         st.caption("パスワードはnoteサブスクリプション会員向け記事に記載しています")
@@ -780,6 +841,8 @@ if show_tab5:
             try:
                 # グレード条件（表示名→DB値に変換）
                 selected_grades = [GRADE_LABEL_MAP[g] for g in selected_grade_labels]
+                # 検索ログ記録
+                log_search(selected_venue, race_no, year_from, year_to, selected_grade_labels)
                 if selected_grades:
                     grade_in = ','.join([f"'{g}'" for g in selected_grades])
                     grade_condition = f"AND rc.grade_code IN ({grade_in})"
