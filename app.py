@@ -277,6 +277,11 @@ with st.sidebar:
     st.markdown("---")
     st.caption("🔎 レース条件検索は\nサブスク会員限定機能です")
     st.caption("👉 https://note.com/boatrace_datalab")
+    st.markdown("---")
+    st.markdown("### 📜 利用規約")
+    st.caption("本ツールの分析結果を転用・紹介する場合は出典として以下を明記してください")
+    st.code("ボートレースデータ分析官\nhttps://boatrace-datalab.streamlit.app", language=None)
+    st.caption("無断転用・商用利用は禁止します")
 
 # ページ切り替え用フラグ
 show_tab1 = page == "📋 レース前判定"
@@ -852,6 +857,7 @@ if show_tab5:
                         LIMIT 20
                     """, conn)
                     st.dataframe(df_combo, use_container_width=True, hide_index=True)
+                    st.caption("© ボートレースデータ分析官 https://boatrace-datalab.streamlit.app | 転用・紹介の際は出典を明記してください")
 
             except Exception as e:
                 st.error(f"エラー：{e}")
@@ -864,3 +870,4 @@ if show_tab5:
 # フッター
 st.divider()
 st.caption("© 2026 ボートレースデータ分析官 | データ：2015〜2026年 約60万件")
+st.caption("本ツールの分析結果を転用・紹介する場合は「ボートレースデータ分析官（https://boatrace-datalab.streamlit.app）を使用」と明記してください")
