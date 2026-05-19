@@ -700,8 +700,8 @@ if show_tab4:
                         st.caption(f"過去1着回数：{total:,}回")
                         st.dataframe(df_solo, use_container_width=True, hide_index=True)
                         st.write("**🎯 推奨買い目TOP3**")
-                        for i, row in enumerate(df_solo.head(3).itertuples(), 1):
-                            st.info(f"{i}位：{in_course}-{int(row._1)}-{int(row._2)}　出現率{row._5}%・平均配当{int(row._6):,}円")
+                        for i, row in df_solo.head(3).iterrows():
+                            st.info(f"{i+1}位：{in_course}-{int(row['2着コース'])}-{int(row['3着コース'])}　出現率{row['出現率(%)']}%・平均配当{int(row['平均配当(円)']):,}円")
                 else:
                     # 各コースの選手データ取得
                     course_data = {}
