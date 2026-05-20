@@ -1,4 +1,3 @@
-cat > scripts/extract_notable_races.py << 'PYEOF'
 """
 extract_notable_races.py - Bファイル（整形テキスト）パーサー
 """
@@ -27,7 +26,7 @@ NOTABLE_CONDITIONS = {
     "noted_stadiums": [],
 }
 
-def parse_b_file(path: Path) -> list[dict]:
+def parse_b_file(path):
     text = path.read_text(encoding="shift_jis", errors="replace")
     lines = text.splitlines()
     races = []
@@ -37,14 +36,12 @@ def parse_b_file(path: Path) -> list[dict]:
     in_data = False
 
     for line in lines:
-        # 場コード検出 例: 21BBGN
-        m = re.match(r'^(\d{2})BBGN', line)
+        m = re.match(r"^(\d{2})BBGN", line)
         if m:
             current_stadium = m.group(1)
             continue
 
-        # レース番号検出 例: 　１Ｒ or １０Ｒ
-        m = re.search(r'[　\s]*([\d１２３４５６７８９０]+)Ｒ', line)
+        m = re.search(r"[　\s]*([\d１２３４５６７８９０]+)Ｒ", line)
         if m and current_stadium:
             if current_race_no and current_boats:
                 races.append({
@@ -53,29 +50,23 @@ def parse_b_file(path: Path) -> list[dict]:
                     "race_no": current_race_no,
                     "boats": current_boats,
                 })
-            num_str = m.group(1)
-            num_str = num_str.translate(str.maketrans('１２３４５６７８９０', '1234567890'))
+            num_str = m.group(1).translate(str.maketrans("１２３４５６７８９０", "1234567890"))
             current_race_no = int(num_str)
             current_boats = []
             in_data = False
             continue
 
-        # ヘッダー区切り線の後がデータ行
-        if re.match(r'^-{10,}', line):
+        if re.match(r"^-{10,}", line):
             in_data = not in_data
             continue
 
-        # 艇データ行 例: 1 4772石丸海渡32香川56A1 ...
         if in_data and current_stadium:
-            m = re.match(r'^([1-6])\s+(\d{4})([\S　]+?)\s*(\d{2})\S+\s+\S+\s+(\S+)', line)
+            m = re.match(r"^([1-6])\s+(\d{4})([\S　]+?)\s*\d{2}", line)
             if m:
-                boat_no = int(m.group(1))
-                racer_id = m.group(2)
-                racer_name = m.group(3).strip()
                 current_boats.append({
-                    "boat_no": boat_no,
-                    "racer_id": racer_id,
-                    "racer_name": racer_name,
+                    "boat_no": int(m.group(1)),
+                    "racer_id": m.group(2),
+                    "racer_name": m.group(3).strip(),
                     "grade": "",
                 })
 
@@ -89,7 +80,7 @@ def parse_b_file(path: Path) -> list[dict]:
 
     return races
 
-def is_notable(race: dict) -> tuple[bool, list[str]]:
+def is_notable(race):
     reasons = []
     if race["race_no"] == NOTABLE_CONDITIONS["final_race_no"]:
         reasons.append("最終レース（優勝戦）")
@@ -142,7 +133,7 @@ def main():
             "出場艇数": len(r["boats"]),
         })
     if flat:
-        with csv_path.open("w", encoding="utf-8", newline="") as f:
+        with open(csv_path, "w", encoding="utf-8", newline="") as f:
             w = csv.DictWriter(f, fieldnames=flat[0].keys())
             w.writeheader()
             w.writerows(flat)
