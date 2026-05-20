@@ -13,26 +13,78 @@ STADIUM_MAP = {
     "21":"芦屋","22":"福岡","23":"唐津","24":"大村",
 }
 
-NOTABLE_CONDITIONS = {"final_race_no": 12, "noted_racers": [], "noted_stadiums": []}
+SG_KEYWORDS = ["ＳＧ","グランプリ","グランドチャンピオン","チャレンジカップ","オールスター","総理大臣杯","笹川賞","全日本選手権","メモリアル","クラシック","ダービー","王座決定戦"]
+G1_KEYWORDS = ["周年記念","選手権","レディース","ヴィーナス"]
+
+NOTED_RACERS = ["4320"]  # 峰竜太
 
 ZEN2HAN = str.maketrans("１２３４５６７８９０", "1234567890")
-RACE_RE = re.compile("[\u3000\\s]*([１-９０\\d]+)Ｒ")
+RACE_RE    = re.compile("[\u3000\\s]*([１-９０\\d]+)Ｒ")
 STADIUM_RE = re.compile(r"^(\d{2})BBGN")
-SEP_RE = re.compile(r"^-{10,}")
-BOAT_RE = re.compile(r"^([1-6])\s+(\d{4})(\S+)")
+SEP_RE     = re.compile(r"^-{10,}")
+DAY_RE     = re.compile("第[\u3000\\s]*([１-９０\\d]+)日")
+
+def detect_grade(title):
+    for kw in SG_KEYWORDS:
+        if kw in title:
+            return "SG"
+    for kw in G1_KEYWORDS:
+        if kw in title:
+            return "G1"
+    return ""
+
+def parse_racer_id(line):
+    # 行頭: 艇番(1文字) スペース 登録番号(4桁) 選手名...
+    # 登録番号は必ず4桁数字
+    m = re.match(r"^([1-6])\s+(\d{4})", line)
+    if not m:
+        return None
+    boat_no  = int(m.group(1))
+    racer_id = m.group(2)
+    # 選手名: 登録番号の後から年齢(2桁数字)の前まで
+    rest = line[m.end():]
+    # 年齢は2桁数字+支部名(漢字2文字)+体重
+    m2 = re.search(r"(\d{2})\S{2}\d{2}", rest)
+    if m2:
+        racer_name = rest[:m2.start()].strip()
+    else:
+        racer_name = rest[:6].strip()
+    return {"boat_no": boat_no, "racer_id": racer_id, "racer_name": racer_name}
 
 def parse_b_file(path):
     text = path.read_text(encoding="shift_jis", errors="replace")
     races = []
-    current_stadium = None
-    current_race_no = None
-    current_boats = []
-    in_data = False
+    current_stadium  = None
+    current_grade    = ""
+    current_day      = 0
+    current_race_no  = None
+    current_boats    = []
+    in_data          = False
+    title_parsed     = False
 
     for line in text.splitlines():
         m = STADIUM_RE.match(line)
         if m:
+            if current_race_no and current_boats:
+                races.append({"stadium_code": current_stadium,
+                    "stadium_name": STADIUM_MAP.get(current_stadium, current_stadium),
+                    "grade": current_grade, "day": current_day,
+                    "race_no": current_race_no, "boats": current_boats})
             current_stadium = m.group(1)
+            current_grade   = ""
+            current_day     = 0
+            current_race_no = None
+            current_boats   = []
+            in_data         = False
+            title_parsed    = False
+            continue
+
+        if current_stadium and not title_parsed and "第" in line and "日" in line:
+            current_grade = detect_grade(line)
+            m2 = DAY_RE.search(line)
+            if m2:
+                current_day = int(m2.group(1).translate(ZEN2HAN))
+            title_parsed = True
             continue
 
         m = RACE_RE.search(line)
@@ -40,10 +92,11 @@ def parse_b_file(path):
             if current_race_no and current_boats:
                 races.append({"stadium_code": current_stadium,
                     "stadium_name": STADIUM_MAP.get(current_stadium, current_stadium),
+                    "grade": current_grade, "day": current_day,
                     "race_no": current_race_no, "boats": current_boats})
             current_race_no = int(m.group(1).translate(ZEN2HAN))
-            current_boats = []
-            in_data = False
+            current_boats   = []
+            in_data         = False
             continue
 
         if SEP_RE.match(line):
@@ -51,26 +104,35 @@ def parse_b_file(path):
             continue
 
         if in_data and current_stadium:
-            m = BOAT_RE.match(line)
-            if m:
-                current_boats.append({"boat_no": int(m.group(1)),
-                    "racer_id": m.group(2), "racer_name": m.group(3), "grade": ""})
+            boat = parse_racer_id(line)
+            if boat:
+                current_boats.append(boat)
 
     if current_race_no and current_boats:
         races.append({"stadium_code": current_stadium,
             "stadium_name": STADIUM_MAP.get(current_stadium, current_stadium),
+            "grade": current_grade, "day": current_day,
             "race_no": current_race_no, "boats": current_boats})
+
     return races
 
 def is_notable(race):
     reasons = []
-    if race["race_no"] == NOTABLE_CONDITIONS["final_race_no"]:
-        reasons.append("最終レース（優勝戦）")
+    grade   = race["grade"]
+    day     = race["day"]
+    race_no = race["race_no"]
+
+    if grade in ("SG", "G1") and day == 1 and race_no == 12:
+        reasons.append("{} 初日12R ドリーム戦".format(grade))
+    if grade in ("SG", "G1") and day == 5 and race_no in (10, 11, 12):
+        reasons.append("{} 5日目{}R 準優勝戦".format(grade, race_no))
+    if grade in ("SG", "G1") and day == 6 and race_no == 12:
+        reasons.append("{} 6日目12R 優勝戦".format(grade))
+
     for boat in race["boats"]:
-        if boat["racer_id"] in [str(r) for r in NOTABLE_CONDITIONS["noted_racers"]]:
+        if boat["racer_id"] in NOTED_RACERS:
             reasons.append("注目選手: {}({})".format(boat["racer_name"], boat["racer_id"]))
-    if race["stadium_code"] in NOTABLE_CONDITIONS["noted_stadiums"]:
-        reasons.append("注目場: {}".format(race["stadium_name"]))
+
     return (len(reasons) > 0), reasons
 
 def main():
@@ -79,26 +141,38 @@ def main():
     parser.add_argument("--out-dir", default="data/processed")
     args = parser.parse_args()
     raw_root = Path(args.raw_dir)
-    out_dir = Path(args.out_dir)
+    out_dir  = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
-    b_files = list(raw_root.rglob("*.TXT")) + list(raw_root.rglob("*.txt"))
+
+    b_files = sorted(set(raw_root.rglob("*.TXT")) | set(raw_root.rglob("*.txt")))
     log.info("Bファイル候補: {} 個".format(len(b_files)))
+
     all_races = []
-    for f in sorted(b_files):
+    for f in b_files:
         races = parse_b_file(f)
         log.info("  解析: {}  レース数: {}".format(f.name, len(races)))
         all_races.extend(races)
+
     notable = []
+    seen = set()
     for r in all_races:
+        key = (r["stadium_code"], r["race_no"], r["day"])
+        if key in seen:
+            continue
+        seen.add(key)
         ok, reasons = is_notable(r)
         if ok:
             r["reasons"] = ", ".join(reasons)
             notable.append(r)
+
     log.info("注目レース: {} 件".format(len(notable)))
+
     json_path = out_dir / "notable_races.json"
     json_path.write_text(json.dumps(notable, ensure_ascii=False, indent=2), encoding="utf-8")
+
     csv_path = out_dir / "notable_races.csv"
     flat = [{"場コード": r["stadium_code"], "場名": r["stadium_name"],
+             "グレード": r["grade"], "開催日": r["day"],
              "レース番号": r["race_no"], "注目理由": r["reasons"],
              "出場艇数": len(r["boats"])} for r in notable]
     if flat:
@@ -106,6 +180,7 @@ def main():
             w = csv.DictWriter(f, fieldnames=flat[0].keys())
             w.writeheader()
             w.writerows(flat)
+
     log.info("抽出完了 ✓")
 
 if __name__ == "__main__":
