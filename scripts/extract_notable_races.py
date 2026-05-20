@@ -148,7 +148,7 @@ def main():
 
     # raw_dir 配下の全 Bファイル（.txt / 拡張子なし）を処理
     b_files = list(raw_root.rglob("b??????")) + list(raw_root.rglob("B??????"))   # b250520 形式
-    b_files += list(raw_root.rglob("*.txt"))
+    b_files += list(raw_root.rglob("*.txt")) + list(raw_root.rglob("*.TXT"))
     b_files = [f for f in b_files if f.is_file()]
     log.info(f"Bファイル候補: {len(b_files)} 個")
 
