@@ -1,0 +1,71 @@
+name: ボートレース Bファイル 自動取得 → Sheets書き込み
+
+on:
+  schedule:
+    # 毎朝 7:00 JST (UTC 22:00 前日) に実行
+    - cron: '0 22 * * *'
+  workflow_dispatch:
+    inputs:
+      target_date:
+        description: '対象日 (YYYYMMDD)。空欄なら当日'
+        required: false
+        default: ''
+
+jobs:
+  fetch-and-write:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: リポジトリをチェックアウト
+        uses: actions/checkout@v4
+
+      - name: Python 3.11 をセットアップ
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: 依存パッケージをインストール
+        run: pip install -r requirements.txt
+
+      # ── サービスアカウントJSONをファイルに書き出す ──────────────────────
+      - name: Google認証情報を復元
+        run: |
+          echo '${{ secrets.GCP_SERVICE_ACCOUNT_JSON }}' > /tmp/gcp_sa.json
+
+      # ── Bファイル取得 ────────────────────────────────────────────────────
+      - name: Bファイルを取得・解析
+        env:
+          TARGET_DATE: ${{ github.event.inputs.target_date }}
+        run: |
+          python scripts/fetch_b_files.py \
+            --date "$TARGET_DATE" \
+            --out-dir data/raw
+
+      # ── 注目レース抽出 ───────────────────────────────────────────────────
+      - name: 注目レース抽出
+        run: |
+          python scripts/extract_notable_races.py \
+            --raw-dir data/raw \
+            --out-dir data/processed
+
+      # ── Google Sheets 書き込み ───────────────────────────────────────────
+      - name: Google Sheetsへ書き込み
+        env:
+          SPREADSHEET_ID:   ${{ secrets.SPREADSHEET_ID }}
+          GCP_SA_JSON_PATH: /tmp/gcp_sa.json
+        run: |
+          python scripts/write_sheets.py \
+            --input-dir data/processed \
+            --spreadsheet-id "$SPREADSHEET_ID" \
+            --sa-json "$GCP_SA_JSON_PATH"
+
+      # ── 生データをアーティファクトとして保存（7日間）────────────────────
+      - name: 生データをアップロード
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: boatrace-raw-${{ github.run_id }}
+          path: data/
+          retention-days: 7
