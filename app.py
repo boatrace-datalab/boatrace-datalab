@@ -9,7 +9,7 @@ import pandas as pd
 import os
 import gspread
 from google.oauth2.service_account import Credentials
-from datetime import datetime, timezone, timedelta
+from datetime import datetime
 
 # ===== 設定 =====
 # DBのパスは環境に合わせて変更してください
@@ -35,8 +35,7 @@ def log_access(page_name):
             return
         sh = gc.open_by_key(st.secrets["SPREADSHEET_ID"])
         ws = sh.worksheet("access_log")
-        JST = timezone(timedelta(hours=9))
-        now = datetime.now(JST).strftime("%Y-%m-%d %H:%M:%S")
+        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         ws.append_row([now, page_name])
     except:
         pass
@@ -48,8 +47,7 @@ def log_search(venue, race_no, year_from, year_to, grades):
             return
         sh = gc.open_by_key(st.secrets["SPREADSHEET_ID"])
         ws = sh.worksheet("search_log")
-        JST = timezone(timedelta(hours=9))
-        now = datetime.now(JST).strftime("%Y-%m-%d %H:%M:%S")
+        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         ws.append_row([now, venue, race_no, year_from, year_to, ','.join(grades) if grades else '全て'])
     except:
         pass
@@ -61,8 +59,7 @@ def log_auth(success, ip_hint=""):
             return
         sh = gc.open_by_key(st.secrets["SPREADSHEET_ID"])
         ws = sh.worksheet("auth_log")
-        JST = timezone(timedelta(hours=9))
-        now = datetime.now(JST).strftime("%Y-%m-%d %H:%M:%S")
+        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         status = "成功" if success else "失敗"
         ws.append_row([now, status])
     except:
@@ -930,6 +927,119 @@ if show_tab5:
                 st.error(f"エラー：{e}")
             finally:
                 conn.close()
+
+        st.divider()
+
+        # ===== 選手×コース別成績検索 =====
+        st.subheader("👤 選手×コース別成績検索")
+        st.caption("選手の登録番号またはお名前を入力してコース別成績を検索します（全期間集計）")
+
+        col_s1, col_s2 = st.columns(2)
+        with col_s1:
+            racer_input = st.text_input("登録番号または選手名", placeholder="例：4320 または 峰竜太", key="racer_input")
+        with col_s2:
+            course_filter = st.selectbox(
+                "コース絞り込み",
+                ["全コース", "1コース", "2コース", "3コース", "4コース", "5コース", "6コース"],
+                key="course_filter"
+            )
+
+        if st.button("選手成績を検索", type="primary", key="btn_racer_search"):
+            if not racer_input.strip():
+                st.warning("登録番号または選手名を入力してください")
+            else:
+                conn = sqlite3.connect(DB_PATH)
+                try:
+                    # 登録番号か選手名かを判定
+                    query_input = racer_input.strip()
+                    if query_input.isdigit():
+                        where_clause = f"racer_no = {int(query_input)}"
+                    else:
+                        where_clause = f"racer_name LIKE '%{query_input}%'"
+
+                    # コース絞り込み
+                    if course_filter == "全コース":
+                        course_clause = ""
+                    else:
+                        course_num = int(course_filter[0])
+                        course_clause = f"AND course = {course_num}"
+
+                    # racer_place_stats から取得
+                    df_place = pd.read_sql(f"""
+                        SELECT
+                            racer_no as 登録番号,
+                            racer_name as 選手名,
+                            course as コース,
+                            total_cnt as 出走数,
+                            win_rate as 勝率,
+                            place2_rate as 複勝率,
+                            place3_rate as '3連対率'
+                        FROM racer_place_stats
+                        WHERE {where_clause}
+                        {course_clause}
+                        ORDER BY course
+                    """, conn)
+
+                    if df_place.empty:
+                        st.warning("該当する選手が見つかりませんでした。")
+                    else:
+                        racer_name = df_place.iloc[0]['選手名']
+                        racer_no   = df_place.iloc[0]['登録番号']
+                        st.success(f"✅ {racer_name}（登録番号：{racer_no}）の成績")
+
+                        # サマリー（全コース合計）
+                        if course_filter == "全コース":
+                            total_cnt  = df_place['出走数'].sum()
+                            avg_win    = round((df_place['勝率'] * df_place['出走数']).sum() / total_cnt, 1)
+                            avg_place2 = round((df_place['複勝率'] * df_place['出走数']).sum() / total_cnt, 1)
+                            avg_place3 = round((df_place['3連対率'] * df_place['出走数']).sum() / total_cnt, 1)
+
+                            col_m1, col_m2, col_m3, col_m4 = st.columns(4)
+                            col_m1.metric("総出走数", f"{total_cnt:,}回")
+                            col_m2.metric("平均勝率", f"{avg_win}%")
+                            col_m3.metric("平均複勝率", f"{avg_place2}%")
+                            col_m4.metric("平均3連対率", f"{avg_place3}%")
+
+                            st.divider()
+
+                        # コース別テーブル
+                        st.write("**コース別成績一覧**")
+                        df_display = df_place[['コース', '出走数', '勝率', '複勝率', '3連対率']].copy()
+                        df_display['コース'] = df_display['コース'].apply(lambda x: f"{x}コース")
+                        df_display['勝率']    = df_display['勝率'].apply(lambda x: f"{x}%")
+                        df_display['複勝率']  = df_display['複勝率'].apply(lambda x: f"{x}%")
+                        df_display['3連対率'] = df_display['3連対率'].apply(lambda x: f"{x}%")
+                        st.dataframe(df_display, use_container_width=True, hide_index=True)
+
+                        # racer_course_stats から1着・2着・3着回数も表示
+                        df_course = pd.read_sql(f"""
+                            SELECT
+                                course as コース,
+                                rank_1st as '1着回数',
+                                rank_2nd as '2着回数',
+                                rank_3rd as '3着回数',
+                                cnt as 出走数,
+                                pct as '1着率(%)',
+                                ROUND(avg_pay, 0) as '平均配当(円)'
+                            FROM racer_course_stats
+                            WHERE {where_clause}
+                            {course_clause}
+                            ORDER BY course
+                        """, conn)
+
+                        if not df_course.empty:
+                            st.divider()
+                            st.write("**コース別詳細（1着・2着・3着回数）**")
+                            df_course['コース'] = df_course['コース'].apply(lambda x: f"{x}コース")
+                            st.dataframe(df_course, use_container_width=True, hide_index=True)
+
+                        st.caption("※ 全期間（2015〜）の集計データです")
+                        st.caption("© ボートレースデータ分析官 https://boatrace-datalab.streamlit.app")
+
+                except Exception as e:
+                    st.error(f"エラー：{e}")
+                finally:
+                    conn.close()
 
         if st.button("ログアウト", key="btn_logout"):
             st.session_state.authenticated = False
