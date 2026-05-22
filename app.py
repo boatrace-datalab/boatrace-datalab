@@ -34,7 +34,7 @@ def get_db_conn():
             return conn, "supabase"
         except Exception:
             pass
-    conn, conn_type = get_db_conn()
+    conn = sqlite3.connect(DB_PATH)
     return conn, "sqlite"
 
 def fix_sql(sql, conn_type):
