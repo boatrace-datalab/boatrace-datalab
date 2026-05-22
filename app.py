@@ -53,21 +53,24 @@ def safe_close(conn, conn_type):
     except Exception:
         pass
 
-def db_read_sql(sql, conn, conn_type):
-    """DB種別に応じてpd.read_sqlを実行"""
-    if conn_type == "supabase":
-        with conn.connect() as c:
-            return pd.read_sql(text(sql), c)
-    return pd.read_sql(sql, conn)
-
 def fix_sql(sql, conn_type):
     """PostgreSQL用にSQLを変換"""
     if conn_type == "supabase":
+        import re
         sql = sql.replace(
             "CAST(strftime('%Y', rc.race_date) AS INTEGER)",
             "EXTRACT(YEAR FROM rc.race_date::DATE)::INTEGER"
         )
+        sql = re.sub(r" as '([^']+)'", lambda m: f' as "{m.group(1)}"', sql)
     return sql
+
+def db_read_sql(sql, conn, conn_type):
+    """DB種別に応じてpd.read_sqlを実行"""
+    sql = fix_sql(sql, conn_type)
+    if conn_type == "supabase":
+        with conn.connect() as c:
+            return pd.read_sql(text(sql), c)
+    return pd.read_sql(sql, conn)
 # ===== Google Sheets ログ関数 =====
 def get_gs_client():
     try:
