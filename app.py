@@ -11,31 +11,38 @@ import gspread
 from google.oauth2.service_account import Credentials
 from datetime import datetime
 try:
-    import psycopg2
-    import psycopg2.extras
-    PSYCOPG2_AVAILABLE = True
+    from sqlalchemy import create_engine, text
+    SQLALCHEMY_AVAILABLE = True
 except ImportError:
-    PSYCOPG2_AVAILABLE = False
+    SQLALCHEMY_AVAILABLE = False
 
 # ===== 設定 =====
-DB_PATH = "boatrace_light3.db"  # ローカル用フォールバック
+DB_PATH = "boatrace_light3.db"
+
+@st.cache_resource
+def get_supabase_engine():
+    try:
+        host = st.secrets["SUPABASE_HOST"]
+        db   = st.secrets["SUPABASE_DB"]
+        user = st.secrets["SUPABASE_USER"]
+        pw   = st.secrets["SUPABASE_PASS"]
+        url  = f"postgresql+psycopg2://{user}:{pw}@{host}:5432/{db}"
+        engine = create_engine(url, pool_pre_ping=True)
+        with engine.connect() as c:
+            c.execute(text("SELECT 1"))
+        return engine
+    except Exception:
+        return None
 
 def get_db_conn():
-    """Supabase接続を返す。失敗時はSQLiteにフォールバック"""
-    if PSYCOPG2_AVAILABLE:
+    if SQLALCHEMY_AVAILABLE:
         try:
-            conn = psycopg2.connect(
-                host=st.secrets["SUPABASE_HOST"],
-                port=5432,
-                database=st.secrets["SUPABASE_DB"],
-                user=st.secrets["SUPABASE_USER"],
-                password=st.secrets["SUPABASE_PASS"]
-            )
-            return conn, "supabase"
+            engine = get_supabase_engine()
+            if engine:
+                return engine.connect(), "supabase"
         except Exception:
             pass
-    conn = sqlite3.connect(DB_PATH)
-    return conn, "sqlite"
+    return sqlite3.connect(DB_PATH), "sqlite"
 
 def fix_sql(sql, conn_type):
     """PostgreSQL用にSQLを変換"""
