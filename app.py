@@ -31,8 +31,7 @@ def get_supabase_engine():
         with engine.connect() as c:
             c.execute(text("SELECT 1"))
         return engine
-    except Exception as e:
-        st.sidebar.error(f"Supabase接続エラー: {e}")
+    except Exception:
         return None
 
 def get_db_conn():
@@ -41,8 +40,8 @@ def get_db_conn():
             engine = get_supabase_engine()
             if engine:
                 return engine, "supabase"
-        except Exception as e:
-            st.sidebar.error(f"DB接続エラー: {e}")
+        except Exception:
+            pass
     return sqlite3.connect(DB_PATH), "sqlite"
 
 def safe_close(conn, conn_type):
