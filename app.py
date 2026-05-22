@@ -10,10 +10,41 @@ import os
 import gspread
 from google.oauth2.service_account import Credentials
 from datetime import datetime
+try:
+    import psycopg2
+    import psycopg2.extras
+    PSYCOPG2_AVAILABLE = True
+except ImportError:
+    PSYCOPG2_AVAILABLE = False
 
 # ===== 設定 =====
-# DBのパスは環境に合わせて変更してください
-DB_PATH = "boatrace_light3.db"
+DB_PATH = "boatrace_light3.db"  # ローカル用フォールバック
+
+def get_db_conn():
+    """Supabase接続を返す。失敗時はSQLiteにフォールバック"""
+    if PSYCOPG2_AVAILABLE:
+        try:
+            conn = psycopg2.connect(
+                host=st.secrets["SUPABASE_HOST"],
+                port=5432,
+                database=st.secrets["SUPABASE_DB"],
+                user=st.secrets["SUPABASE_USER"],
+                password=st.secrets["SUPABASE_PASS"]
+            )
+            return conn, "supabase"
+        except Exception:
+            pass
+    conn, conn_type = get_db_conn()
+    return conn, "sqlite"
+
+def fix_sql(sql, conn_type):
+    """PostgreSQL用にSQLを変換"""
+    if conn_type == "supabase":
+        sql = sql.replace(
+            "CAST(strftime('%Y', rc.race_date) AS INTEGER)",
+            "EXTRACT(YEAR FROM rc.race_date::DATE)::INTEGER"
+        )
+    return sql
 # ===== Google Sheets ログ関数 =====
 def get_gs_client():
     try:
@@ -66,7 +97,7 @@ def log_auth(success, ip_hint=""):
         pass
 
 def init_db():
-    conn = sqlite3.connect(DB_PATH)
+    conn, conn_type = get_db_conn()
     conn.execute("""
         CREATE TABLE IF NOT EXISTS judgment_log (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -173,7 +204,7 @@ def judge_race(venue_id, wind_direction, wind_speed, wave_height,
                in_grade, motor_rate, is_local, grade_code,
                in_st_timing=None, in_st_rank=None):
 
-    conn = sqlite3.connect(DB_PATH)
+    conn, conn_type = get_db_conn()
     score = 0
     details = []
 
@@ -455,7 +486,7 @@ if show_tab1:
                 else:
                     is_correct = -1
 
-                conn = sqlite3.connect(DB_PATH)
+                conn, conn_type = get_db_conn()
                 wind_type = get_wind_type(venue_id_pre, wind_dir_pre)
                 adjusted  = result['adjusted']
                 conn.execute("""
@@ -562,7 +593,7 @@ if show_tab3:
         st.rerun()
 
     try:
-        conn = sqlite3.connect(DB_PATH)
+        conn, conn_type = get_db_conn()
 
         total = pd.read_sql("SELECT COUNT(*) as cnt FROM judgment_log WHERE memo != '自動取り込み'", conn).iloc[0]['cnt']
 
@@ -662,7 +693,7 @@ if show_tab4:
         if in_racer == 0:
             st.warning(f"{in_course}コースの登録番号を入力してください")
         else:
-            conn = sqlite3.connect(DB_PATH)
+            conn, conn_type = get_db_conn()
             try:
                 # 注目コースの選手名取得
                 name_df = pd.read_sql(f"""
@@ -837,7 +868,7 @@ if show_tab5:
         )
 
         if st.button("検索", type="primary", key="btn_search"):
-            conn = sqlite3.connect(DB_PATH)
+            conn, conn_type = get_db_conn()
             try:
                 # グレード条件（表示名→DB値に変換）
                 selected_grades = [GRADE_LABEL_MAP[g] for g in selected_grade_labels]
@@ -860,7 +891,7 @@ if show_tab5:
                     JOIN race rc ON r.race_id = rc.race_id
                     WHERE rc.venue_id = {venue_id}
                     AND rc.race_no = {race_no}
-                    AND CAST(strftime('%Y', rc.race_date) AS INTEGER) BETWEEN {year_from} AND {year_to}
+                    AND EXTRACT(YEAR FROM rc.race_date::DATE)::INTEGER BETWEEN {year_from} AND {year_to}
                     {grade_condition}
                 """, conn)
 
@@ -890,7 +921,7 @@ if show_tab5:
                         JOIN race rc ON r.race_id = rc.race_id
                         WHERE rc.venue_id = {venue_id}
                         AND rc.race_no = {race_no}
-                        AND CAST(strftime('%Y', rc.race_date) AS INTEGER) BETWEEN {year_from} AND {year_to}
+                        AND EXTRACT(YEAR FROM rc.race_date::DATE)::INTEGER BETWEEN {year_from} AND {year_to}
                         {grade_condition}
                         GROUP BY rc.in_grade
                         ORDER BY 件数 DESC
@@ -914,7 +945,7 @@ if show_tab5:
                         JOIN race rc ON r.race_id = rc.race_id
                         WHERE rc.venue_id = {venue_id}
                         AND rc.race_no = {race_no}
-                        AND CAST(strftime('%Y', rc.race_date) AS INTEGER) BETWEEN {year_from} AND {year_to}
+                        AND EXTRACT(YEAR FROM rc.race_date::DATE)::INTEGER BETWEEN {year_from} AND {year_to}
                         {grade_condition}
                         GROUP BY r.rank_1st, r.rank_2nd, r.rank_3rd
                         ORDER BY 件数 DESC
@@ -948,7 +979,7 @@ if show_tab5:
             if not racer_input.strip():
                 st.warning("登録番号または選手名を入力してください")
             else:
-                conn = sqlite3.connect(DB_PATH)
+                conn, conn_type = get_db_conn()
                 try:
                     # 登録番号か選手名かを判定
                     query_input = racer_input.strip()
