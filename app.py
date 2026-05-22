@@ -40,10 +40,18 @@ def get_db_conn():
         try:
             engine = get_supabase_engine()
             if engine:
-                return engine.connect(), "supabase"
+                return engine, "supabase"
         except Exception as e:
             st.sidebar.error(f"DB接続エラー: {e}")
     return sqlite3.connect(DB_PATH), "sqlite"
+
+def safe_close(conn, conn_type):
+    """接続をクローズ（supabaseはengineなのでclose不要）"""
+    try:
+        if conn_type == "sqlite":
+            safe_close(conn, conn_type)
+    except Exception:
+        pass
 
 def fix_sql(sql, conn_type):
     """PostgreSQL用にSQLを変換"""
@@ -263,7 +271,7 @@ def judge_race(venue_id, wind_direction, wind_speed, wave_height,
         in_win_rate = 50.0
         avg_payout  = 7000.0
 
-    conn.close()
+    safe_close(conn, conn_type)
 
     if in_rate_adjust != 0:
         details.append(f"場別イン着率補正：{in_rate_adjust:+.1f}%")
@@ -523,7 +531,7 @@ if show_tab1:
                     is_correct, memo
                 ))
                 conn.commit()
-                conn.close()
+                safe_close(conn, conn_type)
 
                 if is_correct == 1:
                     st.success("✅ 記録しました！的中！")
@@ -671,7 +679,7 @@ if show_tab3:
             """, conn)
             st.dataframe(df_recent, use_container_width=True)
 
-        conn.close()
+        safe_close(conn, conn_type)
 
     except Exception as e:
         st.error(f"DBに接続できません。boatrace.dbのパスを確認してください。\n{e}")
@@ -817,7 +825,7 @@ if show_tab4:
             except Exception as e:
                 st.error(f"エラー：{e}")
             finally:
-                conn.close()
+                safe_close(conn, conn_type)
 # ===== ページ5：レース条件検索（有料） =====
 if show_tab5:
     st.subheader("🔎 レース条件検索")
@@ -969,7 +977,7 @@ if show_tab5:
             except Exception as e:
                 st.error(f"エラー：{e}")
             finally:
-                conn.close()
+                safe_close(conn, conn_type)
 
         st.divider()
 
@@ -1082,7 +1090,7 @@ if show_tab5:
                 except Exception as e:
                     st.error(f"エラー：{e}")
                 finally:
-                    conn.close()
+                    safe_close(conn, conn_type)
 
         if st.button("ログアウト", key="btn_logout"):
             st.session_state.authenticated = False
