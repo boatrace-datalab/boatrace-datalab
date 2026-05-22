@@ -97,7 +97,11 @@ def log_auth(success, ip_hint=""):
         pass
 
 def init_db():
-    conn, conn_type = get_db_conn()
+    # judgment_logはローカルSQLiteのみに作成
+    try:
+        conn = sqlite3.connect(DB_PATH)
+    except Exception:
+        return
     conn.execute("""
         CREATE TABLE IF NOT EXISTS judgment_log (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
