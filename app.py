@@ -49,9 +49,16 @@ def safe_close(conn, conn_type):
     """接続をクローズ（supabaseはengineなのでclose不要）"""
     try:
         if conn_type == "sqlite":
-            safe_close(conn, conn_type)
+            conn.close()
     except Exception:
         pass
+
+def db_read_sql(sql, conn, conn_type):
+    """DB種別に応じてpd.read_sqlを実行"""
+    if conn_type == "supabase":
+        with conn.connect() as c:
+            return pd.read_sql(text(sql), c)
+    return pd.read_sql(sql, conn)
 
 def fix_sql(sql, conn_type):
     """PostgreSQL用にSQLを変換"""
@@ -232,13 +239,13 @@ def judge_race(venue_id, wind_direction, wind_speed, wave_height,
     wave_cat  = get_wave_cat(wave_height)
 
     try:
-        venue_info = pd.read_sql(f"""
+        venue_info = db_read_sql(f"""
             SELECT v.course_width_category, v.rough_tendency, v.score_correction,
                    COALESCE(vic.in_rate_adjust, 0) as in_rate_adjust
             FROM venue v
             LEFT JOIN venue_in_correction vic ON v.venue_id = vic.venue_id
             WHERE v.venue_id = {venue_id}
-        """, conn).iloc[0]
+        """, conn, conn_type).iloc[0]
         course_width     = venue_info['course_width_category']
         rough_tendency   = venue_info['rough_tendency']
         score_correction = int(venue_info['score_correction'])
@@ -250,14 +257,14 @@ def judge_race(venue_id, wind_direction, wind_speed, wave_height,
         in_rate_adjust   = 0.0
 
     try:
-        combo = pd.read_sql(f"""
+        combo = db_read_sql(f"""
             SELECT mansen_rate, in_win_rate, avg_payout
             FROM combo_stats
             WHERE course_width = '{course_width}'
             AND wind_type = '{wind_type}'
             AND in_grade = '{in_grade}'
             AND wave_category = '{wave_cat}'
-        """, conn)
+        """, conn, conn_type)
         if not combo.empty:
             mansen_rate = combo.iloc[0]['mansen_rate']
             in_win_rate = combo.iloc[0]['in_win_rate'] + in_rate_adjust
@@ -615,13 +622,13 @@ if show_tab3:
     try:
         conn, conn_type = get_db_conn()
 
-        total = pd.read_sql("SELECT COUNT(*) as cnt FROM judgment_log WHERE memo != '自動取り込み'", conn).iloc[0]['cnt']
+        total = db_read_sql("SELECT COUNT(*) as cnt FROM judgment_log WHERE memo != '自動取り込み'", conn, conn_type).iloc[0]['cnt']
 
         if total == 0:
             st.info("まだ記録がありません。判定結果を記録してください。")
         else:
             # 全体成績
-            df_total = pd.read_sql("""
+            df_total = db_read_sql("""
                 SELECT 
                     COUNT(*) as 総判定数,
                     SUM(CASE WHEN is_correct=1 THEN 1 ELSE 0 END) as 的中数,
@@ -629,7 +636,7 @@ if show_tab3:
                           NULLIF(SUM(CASE WHEN is_correct>=0 THEN 1 ELSE 0 END),0)*100,1) as 的中率
                 FROM judgment_log
                 WHERE memo != '自動取り込み'
-            """, conn)
+            """, conn, conn_type)
 
             col1, col2, col3 = st.columns(3)
             col1.metric("総判定数", f"{int(df_total.iloc[0]['総判定数'])}件")
@@ -640,7 +647,7 @@ if show_tab3:
 
             # 判定別成績
             st.subheader("判定別成績")
-            df_j = pd.read_sql("""
+            df_j = db_read_sql("""
                 SELECT 
                     judgment as 判定,
                     COUNT(*) as 件数,
@@ -652,14 +659,14 @@ if show_tab3:
                 WHERE memo != '自動取り込み'
                 GROUP BY judgment
                 ORDER BY judgment
-            """, conn)
+            """, conn, conn_type)
             st.dataframe(df_j, use_container_width=True)
 
             st.divider()
 
             # 直近10件
             st.subheader("直近10件の記録")
-            df_recent = pd.read_sql("""
+            df_recent = db_read_sql("""
                 SELECT 
                     log_date as 日付,
                     venue_name as 場名,
@@ -676,7 +683,7 @@ if show_tab3:
                 WHERE memo != '自動取り込み'
                 ORDER BY created_at DESC
                 LIMIT 10
-            """, conn)
+            """, conn, conn_type)
             st.dataframe(df_recent, use_container_width=True)
 
         safe_close(conn, conn_type)
@@ -716,11 +723,11 @@ if show_tab4:
             conn, conn_type = get_db_conn()
             try:
                 # 注目コースの選手名取得
-                name_df = pd.read_sql(f"""
+                name_df = db_read_sql(f"""
                     SELECT racer_name FROM racer_place_stats
                     WHERE racer_no = {in_racer} AND course = {in_course}
                     LIMIT 1
-                """, conn)
+                """, conn, conn_type)
                 in_name = name_df.iloc[0]['racer_name'] if not name_df.empty else f"登録{in_racer}"
 
                 st.success(f"### {in_name}（{in_racer}）が{in_course}コース1着の時")
@@ -729,7 +736,7 @@ if show_tab4:
                 other_courses = [c for c in range(1, 7) if c != in_course and racer_inputs.get(c, 0) > 0]
 
                 if len(other_courses) < 2:
-                    df_solo = pd.read_sql(f"""
+                    df_solo = db_read_sql(f"""
                         SELECT 
                             rank_2nd as '2着コース',
                             rank_3rd as '3着コース',
@@ -741,7 +748,7 @@ if show_tab4:
                         AND course = {in_course}
                         ORDER BY cnt DESC
                         LIMIT 15
-                    """, conn)
+                    """, conn, conn_type)
 
                     if df_solo.empty:
                         st.warning("データが見つかりませんでした。")
@@ -758,12 +765,12 @@ if show_tab4:
                     course_data = {}
                     for c in other_courses:
                         racer_no = racer_inputs[c]
-                        df_p = pd.read_sql(f"""
+                        df_p = db_read_sql(f"""
                             SELECT racer_name, place2_rate, place3_rate, total_cnt
                             FROM racer_place_stats
                             WHERE racer_no = {racer_no} AND course = {c}
                             LIMIT 1
-                        """, conn)
+                        """, conn, conn_type)
                         if not df_p.empty:
                             course_data[c] = {
                                 'racer_no': racer_no,
@@ -901,7 +908,7 @@ if show_tab5:
                     grade_condition = ""
 
                 # 対象レース数確認
-                df_count = pd.read_sql(f"""
+                df_count = db_read_sql(f"""
                     SELECT 
                         COUNT(*) as 総レース数,
                         ROUND(SUM(CASE WHEN r.rank_1st=1 THEN 1.0 ELSE 0 END)/COUNT(*)*100,1) as イン着率,
@@ -913,7 +920,7 @@ if show_tab5:
                     AND rc.race_no = {race_no}
                     AND EXTRACT(YEAR FROM rc.race_date::DATE)::INTEGER BETWEEN {year_from} AND {year_to}
                     {grade_condition}
-                """, conn)
+                """, conn, conn_type)
 
                 total = int(df_count.iloc[0]['総レース数'])
                 if total == 0:
@@ -930,7 +937,7 @@ if show_tab5:
 
                     # 1号艇等級別内訳
                     st.write("**1号艇等級別内訳**")
-                    df_grade = pd.read_sql(f"""
+                    df_grade = db_read_sql(f"""
                         SELECT 
                             rc.in_grade as 等級,
                             COUNT(*) as 件数,
@@ -945,14 +952,14 @@ if show_tab5:
                         {grade_condition}
                         GROUP BY rc.in_grade
                         ORDER BY 件数 DESC
-                    """, conn)
+                    """, conn, conn_type)
                     st.dataframe(df_grade, use_container_width=True, hide_index=True)
 
                     st.divider()
 
                     # 出目ランキング
                     st.write("**出目ランキングTOP20**")
-                    df_combo = pd.read_sql(f"""
+                    df_combo = db_read_sql(f"""
                         SELECT 
                             r.rank_1st as '1着',
                             r.rank_2nd as '2着',
@@ -970,7 +977,7 @@ if show_tab5:
                         GROUP BY r.rank_1st, r.rank_2nd, r.rank_3rd
                         ORDER BY 件数 DESC
                         LIMIT 20
-                    """, conn)
+                    """, conn, conn_type)
                     st.dataframe(df_combo, use_container_width=True, hide_index=True)
                     st.caption("© ボートレースデータ分析官 https://boatrace-datalab.streamlit.app | 転用・紹介の際は出典を明記してください")
 
@@ -1016,7 +1023,7 @@ if show_tab5:
                         course_clause = f"AND course = {course_num}"
 
                     # racer_place_stats から取得
-                    df_place = pd.read_sql(f"""
+                    df_place = db_read_sql(f"""
                         SELECT
                             racer_no as 登録番号,
                             racer_name as 選手名,
@@ -1029,7 +1036,7 @@ if show_tab5:
                         WHERE {where_clause}
                         {course_clause}
                         ORDER BY course
-                    """, conn)
+                    """, conn, conn_type)
 
                     if df_place.empty:
                         st.warning("該当する選手が見つかりませんでした。")
@@ -1063,7 +1070,7 @@ if show_tab5:
                         st.dataframe(df_display, use_container_width=True, hide_index=True)
 
                         # racer_course_stats から1着・2着・3着回数も表示
-                        df_course = pd.read_sql(f"""
+                        df_course = db_read_sql(f"""
                             SELECT
                                 course as コース,
                                 rank_1st as '1着回数',
@@ -1076,7 +1083,7 @@ if show_tab5:
                             WHERE {where_clause}
                             {course_clause}
                             ORDER BY course
-                        """, conn)
+                        """, conn, conn_type)
 
                         if not df_course.empty:
                             st.divider()
