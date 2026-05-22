@@ -62,6 +62,7 @@ def fix_sql(sql, conn_type):
             "EXTRACT(YEAR FROM rc.race_date::DATE)::INTEGER"
         )
         sql = re.sub(r" as '([^']+)'", lambda m: f' as "{m.group(1)}"', sql)
+        sql = sql.replace("ROUND(avg_pay, 0)", "ROUND(avg_pay::numeric, 0)")
     return sql
 
 def db_read_sql(sql, conn, conn_type):
