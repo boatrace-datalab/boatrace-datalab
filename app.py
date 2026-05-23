@@ -123,6 +123,18 @@ def log_auth(success, ip_hint=""):
     except:
         pass
 
+def log_entry_view(venue_name, race_no, judgment, adjusted):
+    try:
+        gc = get_gs_client()
+        if gc is None:
+            return
+        sh = gc.open_by_key(st.secrets["SPREADSHEET_ID"])
+        ws = sh.worksheet("access_log")
+        now = datetime.now(JST).strftime("%Y-%m-%d %H:%M:%S")
+        ws.append_row([now, f"当日出走表:{venue_name}{race_no}R", judgment, f"{adjusted:.1f}%"])
+    except:
+        pass
+
 def init_db():
     # judgment_logはローカルSQLiteのみに作成
     try:
@@ -510,6 +522,11 @@ if show_tab0:
                     </div>
                     """, unsafe_allow_html=True)
                     st.caption("※風・波・ST情報なしの概算値です")
+                    # ログ記録
+                    log_key = f"logged_{race_id}"
+                    if log_key not in st.session_state:
+                        log_entry_view(selected_venue, selected_race_no, judgment, adjusted)
+                        st.session_state[log_key] = True
 
                     st.divider()
 
