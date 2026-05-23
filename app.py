@@ -429,8 +429,7 @@ if 'last_page' not in st.session_state or st.session_state.last_page != page:
 if show_tab0:
     log_access("当日出走表")
     st.subheader("📅 当日出走表")
-    from datetime import date
-    today = date.today().strftime("%Y-%m-%d")
+    today = datetime.now(JST).strftime("%Y-%m-%d")
     st.caption(f"対象日: {today}")
 
     conn, conn_type = get_db_conn()
