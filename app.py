@@ -383,6 +383,7 @@ with st.sidebar:
     page = st.radio(
         "機能を選択してください",
         [
+            "📅 当日出走表",
             "📋 レース前判定",
             "⚡ レース直前判定",
             "📊 成績ダッシュボード",
@@ -401,6 +402,7 @@ with st.sidebar:
     st.caption("無断転用・商用利用は禁止します")
 
 # ページ切り替え用フラグ
+show_tab0 = page == "📅 当日出走表"
 show_tab1 = page == "📋 レース前判定"
 show_tab2 = page == "⚡ レース直前判定"
 show_tab3 = page == "📊 成績ダッシュボード"
@@ -411,6 +413,107 @@ show_tab5 = page == "🔎 レース条件検索"
 if 'last_page' not in st.session_state or st.session_state.last_page != page:
     log_access(page)
     st.session_state.last_page = page
+# ===== ページ0：当日出走表 =====
+if show_tab0:
+    log_access("当日出走表")
+    st.subheader("📅 当日出走表")
+    from datetime import date
+    today = date.today().strftime("%Y-%m-%d")
+    st.caption(f"対象日: {today}")
+
+    conn, conn_type = get_db_conn()
+    try:
+        # 当日の開催場一覧を取得
+        df_venues = db_read_sql(f"""
+            SELECT DISTINCT e.race_id / 100 as venue_race_id,
+                   v.venue_name, v.venue_id,
+                   MIN(e.vote_deadline) as first_deadline
+            FROM entry e
+            JOIN venue v ON CAST(SUBSTRING(CAST(e.race_id AS TEXT), 9, 2) AS INTEGER) = v.venue_id
+            WHERE CAST(e.race_id AS TEXT) LIKE '{today.replace("-", "")}%'
+            GROUP BY e.race_id / 100, v.venue_name, v.venue_id
+            ORDER BY first_deadline
+        """, conn, conn_type)
+
+        if df_venues.empty:
+            st.warning("本日の出走表データがありません。")
+        else:
+            venue_names = df_venues['venue_name'].tolist()
+            selected_venue = st.selectbox("場を選択", venue_names, key="tab0_venue")
+            selected_venue_id = df_venues[df_venues['venue_name'] == selected_venue]['venue_id'].values[0]
+
+            # 選択した場のレース一覧
+            df_races = db_read_sql(f"""
+                SELECT DISTINCT
+                    MOD(CAST(e.race_id AS BIGINT), 100) as race_no,
+                    e.vote_deadline
+                FROM entry e
+                WHERE CAST(e.race_id AS TEXT) LIKE '{today.replace("-", "")}{int(selected_venue_id):02d}%'
+                ORDER BY race_no
+            """, conn, conn_type)
+
+            if not df_races.empty:
+                race_options = [f"{int(r['race_no'])}R  {r['vote_deadline']}" for _, r in df_races.iterrows()]
+                selected_race_str = st.selectbox("レースを選択", race_options, key="tab0_race")
+                selected_race_no = int(selected_race_str.split("R")[0])
+
+                race_id = int(f"{today.replace('-', '')}{int(selected_venue_id):02d}{selected_race_no:02d}")
+
+                # 出走選手を取得
+                df_entry = db_read_sql(f"""
+                    SELECT boat_no, racer_no, racer_name, age, branch, weight, grade,
+                           national_win_rate, local_win_rate, motor_no, boat_no_eq,
+                           vote_deadline, session_results
+                    FROM entry
+                    WHERE race_id = {race_id}
+                    ORDER BY boat_no
+                """, conn, conn_type)
+
+                if not df_entry.empty:
+                    st.markdown(f"### {selected_venue} {selected_race_no}R  締切: {df_entry.iloc[0]['vote_deadline']}")
+
+                    # イン信頼度を自動計算
+                    with st.spinner("イン信頼度を計算中..."):
+                        try:
+                            result = judge_race(
+                                venue_id=int(selected_venue_id),
+                                wind_direction="無風",
+                                wind_speed=0,
+                                wave_height=0,
+                                in_grade=df_entry.iloc[0]['grade'] if not df_entry.empty else "A1",
+                                motor_rate=50.0,
+                                is_local=0,
+                                grade_code=""
+                            )
+                            judgment   = result['judgment']
+                            adjusted   = result['adjusted']
+                            mansen     = result['mansen_rate']
+                        except:
+                            judgment = "データ不足"
+                            adjusted = 0
+                            mansen   = 0
+
+                    col_j1, col_j2, col_j3 = st.columns(3)
+                    col_j1.metric("イン信頼度判定", judgment)
+                    col_j2.metric("調整後イン着率", f"{adjusted:.1f}%")
+                    col_j3.metric("万舟率", f"{mansen:.1f}%")
+                    st.caption("※風・波・ST情報なしの概算値です")
+
+                    st.divider()
+
+                    # 出走表を表示
+                    df_display = df_entry[['boat_no','racer_name','age','branch','grade',
+                                          'national_win_rate','local_win_rate',
+                                          'motor_no','session_results']].copy()
+                    df_display.columns = ['艇番','選手名','年齢','支部','級別',
+                                          '全国勝率','当地勝率','モーターNO','今節成績']
+                    st.dataframe(df_display, use_container_width=True, hide_index=True)
+
+    except Exception as e:
+        st.error(f"エラー: {e}")
+    finally:
+        safe_close(conn, conn_type)
+
 # ===== ページ1：レース前判定 =====
 if show_tab1:
     st.subheader("📋 レース前判定")
