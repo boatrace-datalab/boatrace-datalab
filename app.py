@@ -549,10 +549,12 @@ if show_tab0:
                         <th style="padding:8px;">当地勝率</th>
                         <th style="padding:8px;">モーターNO</th>
                         <th style="padding:8px;">今節成績</th>
+                        <th style="padding:8px;">2回乗り</th>
                     </tr>"""
                     for _, row in df_entry.iterrows():
                         bn = int(row['boat_no'])
                         bg, fg = BOAT_COLORS.get(bn, ("#FFFFFF", "#333333"))
+                        other = f"{row['other_race']}R" if row.get('other_race') and str(row['other_race']).strip() else ""
                         html += f"""<tr style="text-align:center;border-bottom:1px solid #444;">
                             <td style="background:{bg};color:{fg};font-weight:bold;font-size:18px;padding:8px;">{bn}</td>
                             <td style="padding:8px;color:white;">{row['racer_name']}</td>
@@ -563,6 +565,7 @@ if show_tab0:
                             <td style="padding:8px;color:white;">{row['local_win_rate']:.2f}</td>
                             <td style="padding:8px;color:white;">{int(row['motor_no'])}</td>
                             <td style="padding:8px;color:white;">{row['session_results']}</td>
+                            <td style="padding:8px;color:{'#FFD700' if other else 'white'};font-weight:{'bold' if other else 'normal'};">{other}</td>
                         </tr>"""
                     html += "</table>"
                     st.markdown(html, unsafe_allow_html=True)
