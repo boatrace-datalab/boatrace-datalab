@@ -164,26 +164,18 @@ def parse_entry_line(line, race_date_str, stadium_code, race_no, deadline):
     remainder = after_grade[pos:].strip()
 
     # 今節成績と早見番号を分離
-    # 着順文字（1-6・F・S・K）が2つ以上 → 今節成績あり
-    # 末尾の数字（1-2桁）→ 早見番号（当日の他レース番号）
+    # 早見番号はスペース2つ以上の後に右寄せで入る1-2桁の数字
     session_results = ""
     other_race      = ""
 
-    valid_chars = re.findall(r"[1-6FSKfsk]", remainder)
-    if len(valid_chars) >= 2:
-        # 今節成績あり → 末尾の数字（スペース区切りで右寄り）が早見番号
-        m4 = re.search(r"\s+(\d{1,2})\s*$", remainder)
-        if m4:
-            other_race = m4.group(1)
-            session_results = remainder[:m4.start()].strip()
-            session_results = re.sub(r"[^\dFSKfsk\s]", "", session_results).strip()
-        else:
-            session_results = re.sub(r"[^\dFSKfsk\s]", "", remainder).strip()
+    m4 = re.search(r"\s{2,}(\d{1,2})\s*$", remainder)
+    if m4:
+        other_race = m4.group(1)
+        session_part = remainder[:m4.start()].strip()
     else:
-        # 今節成績なし → 早見番号のみ
-        m4 = re.search(r"(\d{1,2})\s*$", remainder)
-        if m4:
-            other_race = m4.group(1)
+        session_part = remainder.strip()
+
+    session_results = re.sub(r"[^\dFSKfsk\s]", "", session_part).strip()
 
     # 支部取得
     m5 = re.search(r"(\d{2})(\S{2,3})(\d{2})(A1|A2|B1|B2)", rest)
