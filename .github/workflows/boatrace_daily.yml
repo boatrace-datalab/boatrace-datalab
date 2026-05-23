@@ -4,7 +4,7 @@ name: ボートレース Bファイル 自動取得 → Sheets書き込み
 on:
   schedule:
     # 毎朝 5:00 JST (UTC 20:00 前日) に実行
-    - cron: '0 20 * * *'
+    - cron: '0 16 * * *'
   workflow_dispatch:
     inputs:
       target_date:
