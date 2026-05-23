@@ -38,7 +38,7 @@ SUPABASE_HOST = "aws-1-ap-northeast-1.pooler.supabase.com"
 SUPABASE_PORT = 5432
 SUPABASE_DB   = "postgres"
 SUPABASE_USER = "postgres.xapywturbedupxdcbkfg"
-SUPABASE_PASS = "!#rd99R9n/z#+/U"  # ← パスワードを入力
+SUPABASE_PASS = os.environ.get("SUPABASE_PASS", "")
 
 STADIUM_MAP = {str(i).zfill(2): i for i in range(1, 25)}
 

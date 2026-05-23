@@ -63,6 +63,16 @@ jobs:
             --spreadsheet-id "$SPREADSHEET_ID" \
             --sa-json "$GCP_SA_JSON_PATH"
 
+
+# ── Kファイル取得 → Supabase更新 ─────────────────────────────────────
+      - name: Kファイル取得・Supabase更新
+        env:
+          SUPABASE_PASS: ${{ secrets.SUPABASE_PASS }}
+        run: |
+          python scripts/fetch_k_files.py \
+            --date "$TARGET_DATE"
+
+
       # ── 生データをアーティファクトとして保存（7日間）────────────────────
       - name: 生データをアップロード
         if: always()
