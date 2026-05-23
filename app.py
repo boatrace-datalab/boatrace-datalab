@@ -853,10 +853,11 @@ if show_tab4:
             return 0
         if input_str.strip().isdigit():
             return int(input_str.strip())
-        # 名前検索
+        # 名前検索（空白を除去して検索）
+        name_query = input_str.strip().replace(" ", "").replace("　", "")
         df = db_read_sql(f"""
             SELECT racer_no FROM racer_place_stats
-            WHERE racer_name LIKE '%{input_str.strip()}%'
+            WHERE REPLACE(REPLACE(racer_name, ' ', ''), '　', '') LIKE '%{name_query}%'
             LIMIT 1
         """, conn, conn_type)
         if not df.empty:
@@ -1186,7 +1187,8 @@ if show_tab5:
                     if query_input.isdigit():
                         where_clause = f"racer_no = {int(query_input)}"
                     else:
-                        where_clause = f"racer_name LIKE '%{query_input}%'"
+                        name_q = query_input.replace(" ", "").replace("　", "")
+                        where_clause = f"REPLACE(REPLACE(racer_name, ' ', ''), '　', '') LIKE '%{name_q}%'"
 
                     # コース絞り込み
                     if course_filter == "全コース":
