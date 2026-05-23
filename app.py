@@ -554,8 +554,11 @@ if show_tab0:
                     for _, row in df_entry.iterrows():
                         bn = int(row['boat_no'])
                         bg, fg = BOAT_COLORS.get(bn, ("#FFFFFF", "#333333"))
-                        other_race_val = str(row['other_race']).strip() if row.get('other_race') is not None else ""
-                        other_race_display = f"{other_race_val}R" if other_race_val and other_race_val != "0" else ""
+                        try:
+                            other_race_val = str(row['other_race']).strip() if row['other_race'] is not None and str(row['other_race']) != 'None' else ""
+                        except:
+                            other_race_val = ""
+                        other_race_display = f"{other_race_val}R" if other_race_val and other_race_val != "0" and other_race_val != "" else ""
                         html += f"""<tr style="text-align:center;border-bottom:1px solid #444;">
                             <td style="background:{bg};color:{fg};font-weight:bold;font-size:18px;padding:8px;">{bn}</td>
                             <td style="padding:8px;color:white;">{row['racer_name']}</td>
