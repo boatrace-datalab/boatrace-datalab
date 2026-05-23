@@ -453,9 +453,9 @@ if show_tab0:
             """, conn, conn_type)
 
             if not df_races.empty:
-                race_options = [f"{int(r['race_no'])}R  {r['vote_deadline']}" for _, r in df_races.iterrows()]
+                race_options = [f"{int(r['race_no'])}R" for _, r in df_races.iterrows()]
                 selected_race_str = st.selectbox("レースを選択", race_options, key="tab0_race")
-                selected_race_no = int(selected_race_str.split("R")[0])
+                selected_race_no = int(selected_race_str.replace("R", ""))
 
                 race_id = int(f"{today.replace('-', '')}{int(selected_venue_id):02d}{selected_race_no:02d}")
 
@@ -501,13 +501,43 @@ if show_tab0:
 
                     st.divider()
 
-                    # 出走表を表示
-                    df_display = df_entry[['boat_no','racer_name','age','branch','grade',
-                                          'national_win_rate','local_win_rate',
-                                          'motor_no','session_results']].copy()
-                    df_display.columns = ['艇番','選手名','年齢','支部','級別',
-                                          '全国勝率','当地勝率','モーターNO','今節成績']
-                    st.dataframe(df_display, use_container_width=True, hide_index=True)
+                    # 出走表をカラフルHTMLで表示
+                    BOAT_COLORS = {
+                        1: ("#FFFFFF", "#333333"),  # 白
+                        2: ("#111111", "#FFFFFF"),  # 黒
+                        3: ("#CC0000", "#FFFFFF"),  # 赤
+                        4: ("#0055CC", "#FFFFFF"),  # 青
+                        5: ("#FFCC00", "#333333"),  # 黄
+                        6: ("#009944", "#FFFFFF"),  # 緑
+                    }
+                    html = """<table style="width:100%;border-collapse:collapse;font-size:14px;">
+                    <tr style="background:#1e3a5f;color:white;text-align:center;">
+                        <th style="padding:8px;">艇番</th>
+                        <th style="padding:8px;">選手名</th>
+                        <th style="padding:8px;">年齢</th>
+                        <th style="padding:8px;">支部</th>
+                        <th style="padding:8px;">級別</th>
+                        <th style="padding:8px;">全国勝率</th>
+                        <th style="padding:8px;">当地勝率</th>
+                        <th style="padding:8px;">モーターNO</th>
+                        <th style="padding:8px;">今節成績</th>
+                    </tr>"""
+                    for _, row in df_entry.iterrows():
+                        bn = int(row['boat_no'])
+                        bg, fg = BOAT_COLORS.get(bn, ("#FFFFFF", "#333333"))
+                        html += f"""<tr style="text-align:center;border-bottom:1px solid #444;">
+                            <td style="background:{bg};color:{fg};font-weight:bold;font-size:18px;padding:8px;">{bn}</td>
+                            <td style="padding:8px;color:white;">{row['racer_name']}</td>
+                            <td style="padding:8px;color:white;">{int(row['age'])}</td>
+                            <td style="padding:8px;color:white;">{row['branch']}</td>
+                            <td style="padding:8px;color:white;">{row['grade']}</td>
+                            <td style="padding:8px;color:white;">{row['national_win_rate']:.2f}</td>
+                            <td style="padding:8px;color:white;">{row['local_win_rate']:.2f}</td>
+                            <td style="padding:8px;color:white;">{int(row['motor_no'])}</td>
+                            <td style="padding:8px;color:white;">{row['session_results']}</td>
+                        </tr>"""
+                    html += "</table>"
+                    st.markdown(html, unsafe_allow_html=True)
 
     except Exception as e:
         st.error(f"エラー: {e}")
