@@ -474,7 +474,7 @@ if show_tab0:
                 df_entry = db_read_sql(f"""
                     SELECT boat_no, racer_no, racer_name, age, branch, weight, grade,
                            national_win_rate, local_win_rate, motor_no, boat_no_eq,
-                           vote_deadline, session_results
+                           vote_deadline, session_results, other_race
                     FROM entry
                     WHERE race_id = {race_id}
                     ORDER BY boat_no
