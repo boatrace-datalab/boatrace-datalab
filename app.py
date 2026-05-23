@@ -845,18 +845,37 @@ if show_tab4:
     st.subheader("🔍 出走メンバー買い目診断")
     st.caption("各コースの登録番号を入力すると、注目コースが1着の時の推奨買い目を表示します")
 
-    st.write("**出走選手を入力（登録番号・不明は0のまま）**")
+    st.write("**出走選手を入力（登録番号または選手名・不明は空欄のまま）**")
+
+    def resolve_racer(input_str, course_no, conn, conn_type):
+        """登録番号または選手名から登録番号を返す"""
+        if not input_str.strip():
+            return 0
+        if input_str.strip().isdigit():
+            return int(input_str.strip())
+        # 名前検索
+        df = db_read_sql(f"""
+            SELECT racer_no FROM racer_place_stats
+            WHERE racer_name LIKE '%{input_str.strip()}%'
+            LIMIT 1
+        """, conn, conn_type)
+        if not df.empty:
+            return int(df.iloc[0]['racer_no'])
+        return 0
+
     cols = st.columns(6)
-    racer_inputs = {}
+    racer_inputs_raw = {}
     for i, col in enumerate(cols, 1):
         with col:
-            val = col.number_input(
+            val = col.text_input(
                 f"{i}コース",
-                min_value=0, max_value=9999,
-                value=0, step=1,
+                value="",
+                placeholder="番号or名前",
                 key=f"racer_{i}"
             )
-            racer_inputs[i] = int(val)
+            racer_inputs_raw[i] = val
+
+    racer_inputs = {}
 
     in_course = st.selectbox(
         "注目コース（何コースが1着になった時の買い目を見る？）",
@@ -865,9 +884,14 @@ if show_tab4:
     )
 
     if st.button("買い目を診断する", type="primary", key="btn_racer"):
+        conn_tmp, conn_type_tmp = get_db_conn()
+        for i in range(1, 7):
+            racer_inputs[i] = resolve_racer(racer_inputs_raw.get(i, ""), i, conn_tmp, conn_type_tmp)
+        safe_close(conn_tmp, conn_type_tmp)
+
         in_racer = racer_inputs.get(in_course, 0)
         if in_racer == 0:
-            st.warning(f"{in_course}コースの登録番号を入力してください")
+            st.warning(f"{in_course}コースの登録番号または選手名を入力してください")
         else:
             conn, conn_type = get_db_conn()
             try:
