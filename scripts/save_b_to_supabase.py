@@ -161,7 +161,7 @@ def parse_entry_line(line, race_date_str, stadium_code, race_no, deadline):
             pos += m3.end()
         else:
             break
-    remainder = after_grade[pos:].strip()
+    remainder = after_grade[pos:]
 
     # 今節成績と早見番号を分離
     # 早見番号はスペース2つ以上の後に右寄せで入る1-2桁の数字
