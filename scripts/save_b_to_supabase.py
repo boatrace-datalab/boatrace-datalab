@@ -1,10 +1,6 @@
 """
 save_b_to_supabase.py
 BファイルをパースしてSupabaseのentryテーブルに保存する。
-
-使い方:
-  python3 scripts/save_b_to_supabase.py --date 20260523
-  python3 scripts/save_b_to_supabase.py  # 当日分
 """
 
 import argparse
@@ -39,7 +35,7 @@ SUPABASE_HOST = "aws-1-ap-northeast-1.pooler.supabase.com"
 SUPABASE_PORT = 5432
 SUPABASE_DB   = "postgres"
 SUPABASE_USER = "postgres.xapywturbedupxdcbkfg"
-SUPABASE_PASS = os.environ.get("SUPABASE_PASS", "!#rd99R9n/z#+/U")  # 環境変数 or 直接入力
+SUPABASE_PASS = os.environ.get("SUPABASE_PASS", "!#rd99R9n/z#+/U")
 
 STADIUM_MAP = {str(i).zfill(2): i for i in range(1, 25)}
 ZEN2HAN = str.maketrans("１２３４５６７８９０", "1234567890")
@@ -95,12 +91,6 @@ def download_lzh(dt):
     return r.content
 
 def parse_b_file(text, race_date_str):
-    """
-    Bファイルをパースしてentryレコードを返す
-    選手行フォーマット:
-    艇番(1) 登録番号(4) 選手名(可変) 年齢(2) 支部(2-3) 体重(2) 級別(2)
-    全国勝率 全国2率 当地勝率 当地2率 モーターNO モーター2率 ボートNO ボート2率 今節成績... 早見
-    """
     lines = text.splitlines()
     entries = []
 
@@ -110,18 +100,15 @@ def parse_b_file(text, race_date_str):
     in_data              = False
 
     for line in lines:
-        # 場コード
         m = re.match(r"^(\d{2})BBGN", line)
         if m:
             current_stadium_code = m.group(1)
             continue
 
-        # レース番号と締切時刻
         m = re.search(r"[\u3000\s]*([１-９０\d]+)Ｒ", line)
         if m and current_stadium_code:
             current_race_no  = int(m.group(1).translate(ZEN2HAN))
             in_data          = False
-            # 締切時刻
             t = re.search(r"(\d{1,2}：\d{2})", line)
             current_deadline = t.group(1) if t else ""
             continue
@@ -139,11 +126,6 @@ def parse_b_file(text, race_date_str):
     return entries
 
 def parse_entry_line(line, race_date_str, stadium_code, race_no, deadline):
-    """
-    選手行をパース
-    例: 1 4772石丸海渡32香川56A1 6.40 50.41 7.57 60.00 17 22.22138 39.29 1 6 234 6   10
-    """
-    # 艇番と登録番号
     m = re.match(r"^([1-6])\s+(\d{4})", line)
     if not m:
         return None
@@ -152,48 +134,61 @@ def parse_entry_line(line, race_date_str, stadium_code, race_no, deadline):
     racer_no = int(m.group(2))
     rest     = line[m.end():]
 
-    # 選手名（登録番号後から年齢の前まで）
-    # 年齢は2桁数字+支部(漢字)+体重(数字)+級別
-    m2 = re.search(r"(\d{2})(\S{2,3})(\d{2})(A1|A2|B1|B2)", rest)
+    m2 = re.search(r"(\d{2})\S{2,3}(\d{2})(A1|A2|B1|B2)", rest)
     if not m2:
         return None
 
     racer_name = rest[:m2.start()].strip()
     age        = int(m2.group(1))
-    branch     = m2.group(2).strip()
-    weight     = float(m2.group(3))
-    grade      = m2.group(4)
+    weight     = float(m2.group(2))
+    grade      = m2.group(3)
     after_grade = rest[m2.end():]
 
-    # 数値データ: 全国勝率 全国2率 当地勝率 当地2率 モーターNO モーター2率 ボートNO ボート2率
     nums = re.findall(r"[\d.]+", after_grade)
     try:
         national_win  = float(nums[0]) if len(nums) > 0 else 0.0
-        national_2    = float(nums[1]) if len(nums) > 1 else 0.0
         local_win     = float(nums[2]) if len(nums) > 2 else 0.0
-        local_2       = float(nums[3]) if len(nums) > 3 else 0.0
         motor_no      = int(nums[4])   if len(nums) > 4 else 0
-        motor_2       = float(nums[5]) if len(nums) > 5 else 0.0
         boat_no_eq    = int(nums[6])   if len(nums) > 6 else 0
-        boat_2        = float(nums[7]) if len(nums) > 7 else 0.0
     except (ValueError, IndexError):
         return None
 
-    # 今節成績（残りの文字から数字・F・S・Kなどを取得）
-    after_boat = after_grade
-    # モーター2率以降の位置を特定
+    # 8つの数値の後の部分を取得
     pos = 0
     for _ in range(8):
-        m3 = re.search(r"[\d.]+", after_boat[pos:])
+        m3 = re.search(r"[\d.]+", after_grade[pos:])
         if m3:
             pos += m3.end()
         else:
             break
-    session_part = after_boat[pos:].strip()
-    # 今節成績: 数字・F・S・K・空白のみ
-    session_results = re.sub(r"[^\dFSKfsk\s]", "", session_part).strip()
+    remainder = after_grade[pos:].strip()
 
-    # race_id
+    # 今節成績と早見番号を分離
+    # 着順文字（1-6・F・S・K）が2つ以上 → 今節成績あり
+    # 末尾の数字（1-2桁）→ 早見番号（当日の他レース番号）
+    session_results = ""
+    other_race      = ""
+
+    valid_chars = re.findall(r"[1-6FSKfsk]", remainder)
+    if len(valid_chars) >= 2:
+        # 今節成績あり → 末尾の数字（スペース区切りで右寄り）が早見番号
+        m4 = re.search(r"\s+(\d{1,2})\s*$", remainder)
+        if m4:
+            other_race = m4.group(1)
+            session_results = remainder[:m4.start()].strip()
+            session_results = re.sub(r"[^\dFSKfsk\s]", "", session_results).strip()
+        else:
+            session_results = re.sub(r"[^\dFSKfsk\s]", "", remainder).strip()
+    else:
+        # 今節成績なし → 早見番号のみ
+        m4 = re.search(r"(\d{1,2})\s*$", remainder)
+        if m4:
+            other_race = m4.group(1)
+
+    # 支部取得
+    m5 = re.search(r"(\d{2})(\S{2,3})(\d{2})(A1|A2|B1|B2)", rest)
+    branch = m5.group(2).strip() if m5 else ""
+
     venue_id  = STADIUM_MAP.get(stadium_code, 0)
     date_part = race_date_str.replace("-", "")
     race_id   = int(f"{date_part}{venue_id:02d}{race_no:02d}")
@@ -213,6 +208,7 @@ def parse_entry_line(line, race_date_str, stadium_code, race_no, deadline):
         "boat_no_eq":       boat_no_eq,
         "vote_deadline":    deadline,
         "session_results":  session_results,
+        "other_race":       other_race,
     }
 
 def save_to_supabase(pg_conn, entries):
@@ -223,18 +219,19 @@ def save_to_supabase(pg_conn, entries):
             INSERT INTO entry (
                 race_id, boat_no, racer_no, racer_name, age, branch, weight, grade,
                 national_win_rate, local_win_rate, motor_no, boat_no_eq,
-                vote_deadline, session_results
+                vote_deadline, session_results, other_race
             ) VALUES %s
             ON CONFLICT (race_id, boat_no) DO UPDATE SET
-                racer_no         = EXCLUDED.racer_no,
-                racer_name       = EXCLUDED.racer_name,
-                session_results  = EXCLUDED.session_results,
-                vote_deadline    = EXCLUDED.vote_deadline
+                racer_no        = EXCLUDED.racer_no,
+                racer_name      = EXCLUDED.racer_name,
+                session_results = EXCLUDED.session_results,
+                vote_deadline   = EXCLUDED.vote_deadline,
+                other_race      = EXCLUDED.other_race
         """, [(e["race_id"], e["boat_no"], e["racer_no"], e["racer_name"],
                e["age"], e["branch"], e["weight"], e["grade"],
                e["national_win_rate"], e["local_win_rate"],
                e["motor_no"], e["boat_no_eq"],
-               e["vote_deadline"], e["session_results"]) for e in entries])
+               e["vote_deadline"], e["session_results"], e["other_race"]) for e in entries])
     pg_conn.commit()
     return len(entries)
 
@@ -259,7 +256,7 @@ def main():
     args = parser.parse_args()
 
     if not SUPABASE_PASS:
-        log.error("SUPABASE_PASSを設定してください（環境変数またはスクリプト内）")
+        log.error("SUPABASE_PASSを設定してください")
         return
 
     pg_conn = get_pg_conn()
