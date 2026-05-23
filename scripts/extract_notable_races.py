@@ -14,7 +14,7 @@ STADIUM_MAP = {
 }
 
 SG_KEYWORDS = ["ＳＧ","グランプリ","グランドチャンピオン","チャレンジカップ","オールスター","総理大臣杯","笹川賞","全日本選手権","メモリアル","クラシック","ダービー","王座決定戦"]
-G1_KEYWORDS = ["周年記念","選手権","レディース","ヴィーナス"]
+G1_KEYWORDS = ["周年記念","選手権","レディース","ヴィーナス","オールレディース"]
 
 NOTED_RACERS = ["4320"]  # 峰竜太
 
@@ -34,16 +34,12 @@ def detect_grade(title):
     return ""
 
 def parse_racer_id(line):
-    # 行頭: 艇番(1文字) スペース 登録番号(4桁) 選手名...
-    # 登録番号は必ず4桁数字
     m = re.match(r"^([1-6])\s+(\d{4})", line)
     if not m:
         return None
     boat_no  = int(m.group(1))
     racer_id = m.group(2)
-    # 選手名: 登録番号の後から年齢(2桁数字)の前まで
-    rest = line[m.end():]
-    # 年齢は2桁数字+支部名(漢字2文字)+体重
+    rest     = line[m.end():]
     m2 = re.search(r"(\d{2})\S{2}\d{2}", rest)
     if m2:
         racer_name = rest[:m2.start()].strip()
@@ -79,12 +75,18 @@ def parse_b_file(path):
             title_parsed    = False
             continue
 
-        if current_stadium and not title_parsed and "第" in line and "日" in line:
-            current_grade = detect_grade(line)
+        # タイトル行（場コード後〜最初のレース番号前）でグレードと開催日を取得
+        if current_stadium and not title_parsed:
+            detected = detect_grade(line)
+            if detected:
+                current_grade = detected
             m2 = DAY_RE.search(line)
             if m2:
                 current_day = int(m2.group(1).translate(ZEN2HAN))
-            title_parsed = True
+            # gradeとdayの両方が揃ったらtitle_parsedをTrue
+            # ただし10行以上経過したら強制的にTrue
+            if current_day > 0 and current_grade:
+                title_parsed = True
             continue
 
         m = RACE_RE.search(line)
@@ -113,7 +115,6 @@ def parse_b_file(path):
             "stadium_name": STADIUM_MAP.get(current_stadium, current_stadium),
             "grade": current_grade, "day": current_day,
             "race_no": current_race_no, "boats": current_boats})
-
     return races
 
 def is_notable(race):
