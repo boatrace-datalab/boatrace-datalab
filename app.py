@@ -9,7 +9,8 @@ import pandas as pd
 import os
 import gspread
 from google.oauth2.service_account import Credentials
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
+JST = timezone(timedelta(hours=9))
 try:
     from sqlalchemy import create_engine, text
     SQLALCHEMY_AVAILABLE = True
@@ -92,7 +93,7 @@ def log_access(page_name):
             return
         sh = gc.open_by_key(st.secrets["SPREADSHEET_ID"])
         ws = sh.worksheet("access_log")
-        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        now = datetime.now(JST).strftime("%Y-%m-%d %H:%M:%S")
         ws.append_row([now, page_name])
     except:
         pass
@@ -104,7 +105,7 @@ def log_search(venue, race_no, year_from, year_to, grades):
             return
         sh = gc.open_by_key(st.secrets["SPREADSHEET_ID"])
         ws = sh.worksheet("search_log")
-        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        now = datetime.now(JST).strftime("%Y-%m-%d %H:%M:%S")
         ws.append_row([now, venue, race_no, year_from, year_to, ','.join(grades) if grades else '全て'])
     except:
         pass
@@ -116,7 +117,7 @@ def log_auth(success, ip_hint=""):
             return
         sh = gc.open_by_key(st.secrets["SPREADSHEET_ID"])
         ws = sh.worksheet("auth_log")
-        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        now = datetime.now(JST).strftime("%Y-%m-%d %H:%M:%S")
         status = "成功" if success else "失敗"
         ws.append_row([now, status])
     except:
