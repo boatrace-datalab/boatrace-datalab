@@ -493,10 +493,22 @@ if show_tab0:
                             adjusted = 0
                             mansen   = 0
 
-                    col_j1, col_j2, col_j3 = st.columns(3)
-                    col_j1.metric("イン信頼度判定", judgment)
-                    col_j2.metric("調整後イン着率", f"{adjusted:.1f}%")
-                    col_j3.metric("万舟率", f"{mansen:.1f}%")
+                    st.markdown(f"""
+                    <div style="display:flex;gap:16px;margin-bottom:8px;">
+                        <div style="background:#1e3a5f;padding:12px 16px;border-radius:8px;flex:2;">
+                            <div style="color:#aaa;font-size:12px;">イン信頼度判定</div>
+                            <div style="color:white;font-size:16px;font-weight:bold;margin-top:4px;">{judgment}</div>
+                        </div>
+                        <div style="background:#1e3a5f;padding:12px 16px;border-radius:8px;flex:1;">
+                            <div style="color:#aaa;font-size:12px;">調整後イン着率</div>
+                            <div style="color:white;font-size:16px;font-weight:bold;margin-top:4px;">{adjusted:.1f}%</div>
+                        </div>
+                        <div style="background:#1e3a5f;padding:12px 16px;border-radius:8px;flex:1;">
+                            <div style="color:#aaa;font-size:12px;">万舟率</div>
+                            <div style="color:white;font-size:16px;font-weight:bold;margin-top:4px;">{mansen:.1f}%</div>
+                        </div>
+                    </div>
+                    """, unsafe_allow_html=True)
                     st.caption("※風・波・ST情報なしの概算値です")
 
                     st.divider()
