@@ -1,0 +1,38 @@
+name: 毎日データ取得
+
+on:
+  schedule:
+    # 毎日JST 23:30（UTC 14:30）に実行
+    - cron: '30 14 * * *'
+  workflow_dispatch:  # 手動実行も可能
+
+jobs:
+  fetch-daily:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: リポジトリをチェックアウト
+        uses: actions/checkout@v4
+
+      - name: Python環境セットアップ
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: 7-Zipインストール
+        run: sudo apt-get install -y p7zip-full
+
+      - name: 依存パッケージインストール
+        run: pip install requests psycopg2-binary
+
+      - name: Kファイル取得・保存（前日分）
+        env:
+          SUPABASE_PASS: ${{ secrets.SUPABASE_PASS }}
+        run: |
+          python fetch_k_files.py
+
+      - name: Bファイル取得・保存（翌日分）
+        env:
+          SUPABASE_PASS: ${{ secrets.SUPABASE_PASS }}
+        run: |
+          python save_b_to_supabase.py
