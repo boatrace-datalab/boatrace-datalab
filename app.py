@@ -135,6 +135,29 @@ def log_entry_view(venue_name, race_no, judgment, adjusted):
     except:
         pass
 
+def get_recent_results(conn, conn_type, racer_no, course, current_race_id):
+    """選手のコース別直近10走着順を取得"""
+    try:
+        df = db_read_sql(f"""
+            SELECT finish
+            FROM result_detail
+            WHERE racer_no = {racer_no}
+            AND course = {course}
+            AND race_id < {current_race_id}
+            ORDER BY race_id DESC
+            LIMIT 10
+        """, conn, conn_type)
+        if df.empty:
+            return "－"
+        def fmt(f):
+            if f == 1:   return "①"
+            elif f == 2: return "②"
+            elif f == 3: return "③"
+            else:        return str(f)
+        return "　".join(fmt(int(f)) for f in df['finish'].tolist())
+    except:
+        return "－"
+
 def init_db():
     # judgment_logはローカルSQLiteのみに作成
     try:
@@ -538,18 +561,19 @@ if show_tab0:
                         5: ("#FFCC00", "#333333"),  # 黄
                         6: ("#009944", "#FFFFFF"),  # 緑
                     }
-                    html = """<table style="width:100%;border-collapse:collapse;font-size:14px;">
+                    html = """<table style="width:100%;border-collapse:collapse;font-size:13px;">
                     <tr style="background:#1e3a5f;color:white;text-align:center;">
-                        <th style="padding:8px;">艇番</th>
-                        <th style="padding:8px;">選手名</th>
-                        <th style="padding:8px;">年齢</th>
-                        <th style="padding:8px;">支部</th>
-                        <th style="padding:8px;">級別</th>
-                        <th style="padding:8px;">全国勝率</th>
-                        <th style="padding:8px;">当地勝率</th>
-                        <th style="padding:8px;">モーターNO</th>
-                        <th style="padding:8px;">今節成績</th>
-                        <th style="padding:8px;">2回乗り</th>
+                        <th style="padding:6px;">艇番</th>
+                        <th style="padding:6px;">選手名</th>
+                        <th style="padding:6px;">年齢</th>
+                        <th style="padding:6px;">支部</th>
+                        <th style="padding:6px;">級別</th>
+                        <th style="padding:6px;">全国勝率</th>
+                        <th style="padding:6px;">当地勝率</th>
+                        <th style="padding:6px;">モーターNO</th>
+                        <th style="padding:6px;">今節成績</th>
+                        <th style="padding:6px;">2回乗り</th>
+                        <th style="padding:6px;">コース別直近10走</th>
                     </tr>"""
                     for _, row in df_entry.iterrows():
                         bn = int(row['boat_no'])
@@ -559,21 +583,24 @@ if show_tab0:
                         except:
                             other_race_val = ""
                         other_race_display = f"{other_race_val}R" if other_race_val and other_race_val != "0" and other_race_val != "" else ""
-                        or_color = "#FFD700" if other_race_display else "white"
-                        or_weight = "bold" if other_race_display else "normal"
+                        or_color  = "#FFD700" if other_race_display else "white"
+                        or_weight = "bold"    if other_race_display else "normal"
+                        recent = get_recent_results(conn, conn_type, int(row['racer_no']), bn, race_id)
                         html += f"""<tr style="text-align:center;border-bottom:1px solid #444;">
-                            <td style="background:{bg};color:{fg};font-weight:bold;font-size:18px;padding:8px;">{bn}</td>
-                            <td style="padding:8px;color:white;">{row['racer_name']}</td>
-                            <td style="padding:8px;color:white;">{int(row['age'])}</td>
-                            <td style="padding:8px;color:white;">{row['branch']}</td>
-                            <td style="padding:8px;color:white;">{row['grade']}</td>
-                            <td style="padding:8px;color:white;">{row['national_win_rate']:.2f}</td>
-                            <td style="padding:8px;color:white;">{row['local_win_rate']:.2f}</td>
-                            <td style="padding:8px;color:white;">{int(row['motor_no'])}</td>
-                            <td style="padding:8px;color:white;">{row['session_results']}</td>
-                            <td style="padding:8px;color:{or_color};font-weight:{or_weight};">{other_race_display}</td>
+                            <td style="background:{bg};color:{fg};font-weight:bold;font-size:18px;padding:6px;">{bn}</td>
+                            <td style="padding:6px;color:white;">{row['racer_name']}</td>
+                            <td style="padding:6px;color:white;">{int(row['age'])}</td>
+                            <td style="padding:6px;color:white;">{row['branch']}</td>
+                            <td style="padding:6px;color:white;">{row['grade']}</td>
+                            <td style="padding:6px;color:white;">{row['national_win_rate']:.2f}</td>
+                            <td style="padding:6px;color:white;">{row['local_win_rate']:.2f}</td>
+                            <td style="padding:6px;color:white;">{int(row['motor_no'])}</td>
+                            <td style="padding:6px;color:white;">{row['session_results']}</td>
+                            <td style="padding:6px;color:{or_color};font-weight:{or_weight};">{other_race_display}</td>
+                            <td style="padding:6px;color:#90EE90;font-size:14px;letter-spacing:2px;">{recent}</td>
                         </tr>"""
                     html += "</table>"
+                    st.caption("※コース別直近10走：直近順（①②③=3着以内、数字=着順）")
                     st.markdown(html, unsafe_allow_html=True)
 
     except Exception as e:
