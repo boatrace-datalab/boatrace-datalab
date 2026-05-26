@@ -158,6 +158,50 @@ def get_recent_results(conn, conn_type, racer_no, course, current_race_id):
     except:
         return "－"
 
+def get_st_stats(conn, conn_type, racer_no, current_race_id):
+    """今節平均ST（全コース）と直近1年コース別平均STを取得"""
+    # 今節のrace_idの日付部分から節の開始を推定（今日から遡って同一venue_idの連続分）
+    # 簡易版：current_race_idの場・直近14日以内を今節とみなす
+    date_str  = str(current_race_id)[:8]   # YYYYMMDD
+    venue_str = str(current_race_id)[8:10] # venue_id 2桁
+    race_id_start = int(f"{date_str}{venue_str}01") - 1400000  # 約14日前
+
+    # 今節平均ST（同一venue・直近14日・全コース）
+    try:
+        df_session = db_read_sql(f"""
+            SELECT AVG(st_timing) as avg_st
+            FROM start_detail
+            WHERE racer_no = {racer_no}
+            AND race_id >= {race_id_start}
+            AND race_id < {current_race_id}
+            AND st_timing >= 0
+        """, conn, conn_type)
+        session_st = df_session.iloc[0]['avg_st'] if not df_session.empty and df_session.iloc[0]['avg_st'] is not None else None
+    except:
+        session_st = None
+
+    # 直近1年コース別平均ST（boat_noと同じcoursで）
+    # race_idのYYYYMMDD部分から1年前を計算
+    from datetime import datetime, timedelta
+    try:
+        race_date  = datetime.strptime(date_str, "%Y%m%d")
+        one_yr_ago = (race_date - timedelta(days=365)).strftime("%Y%m%d")
+        race_id_1yr = int(f"{one_yr_ago}0000")
+        df_yearly = db_read_sql(f"""
+            SELECT course, AVG(st_timing) as avg_st, COUNT(*) as cnt
+            FROM start_detail
+            WHERE racer_no = {racer_no}
+            AND race_id >= {race_id_1yr}
+            AND race_id < {current_race_id}
+            AND st_timing >= 0
+            GROUP BY course
+        """, conn, conn_type)
+        yearly_st = {int(row['course']): float(row['avg_st']) for _, row in df_yearly.iterrows()} if not df_yearly.empty else {}
+    except:
+        yearly_st = {}
+
+    return session_st, yearly_st
+
 def init_db():
     # judgment_logはローカルSQLiteのみに作成
     try:
@@ -573,6 +617,8 @@ if show_tab0:
                         <th style="padding:6px;">モーターNO</th>
                         <th style="padding:6px;">今節成績</th>
                         <th style="padding:6px;">2回乗り</th>
+                        <th style="padding:6px;">今節平均ST</th>
+                        <th style="padding:6px;">直近1年ST</th>
                         <th style="padding:6px;">コース別直近10走</th>
                     </tr>"""
                     for _, row in df_entry.iterrows():
@@ -586,6 +632,10 @@ if show_tab0:
                         or_color  = "#FFD700" if other_race_display else "white"
                         or_weight = "bold"    if other_race_display else "normal"
                         recent = get_recent_results(conn, conn_type, int(row['racer_no']), bn, race_id)
+                        session_st, yearly_st = get_st_stats(conn, conn_type, int(row['racer_no']), race_id)
+                        session_st_str = f".{int(round(session_st * 100)):02d}" if session_st is not None else "－"
+                        yearly_st_val  = yearly_st.get(bn)
+                        yearly_st_str  = f".{int(round(yearly_st_val * 100)):02d}" if yearly_st_val is not None else "－"
                         html += f"""<tr style="text-align:center;border-bottom:1px solid #444;">
                             <td style="background:{bg};color:{fg};font-weight:bold;font-size:18px;padding:6px;">{bn}</td>
                             <td style="padding:6px;color:white;">{row['racer_name']}</td>
@@ -597,10 +647,12 @@ if show_tab0:
                             <td style="padding:6px;color:white;">{int(row['motor_no'])}</td>
                             <td style="padding:6px;color:white;">{row['session_results']}</td>
                             <td style="padding:6px;color:{or_color};font-weight:{or_weight};">{other_race_display}</td>
+                            <td style="padding:6px;color:#FFD700;">{session_st_str}</td>
+                            <td style="padding:6px;color:#87CEEB;">{yearly_st_str}</td>
                             <td style="padding:6px;color:#90EE90;font-size:14px;letter-spacing:2px;">{recent}</td>
                         </tr>"""
                     html += "</table>"
-                    st.caption("※コース別直近10走：左が10走前・右が1走前（①=1着　②=2着　③=3着　数字=着順）")
+                    st.caption("※今節平均ST=今節全コース平均　直近1年ST=艇番コース別平均　コース別直近10走：左が10走前・右が1走前")
                     st.markdown(html, unsafe_allow_html=True)
 
     except Exception as e:

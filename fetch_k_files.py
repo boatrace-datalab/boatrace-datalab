@@ -160,9 +160,23 @@ def parse_k_file(text, race_date_str):
             continue
 
         if in_data and current_venue_code and current_race_no:
-            m = re.match(r"^\s{1,3}(\d{2})\s+(\d)\s+(\d{4})", line)
+            m = re.match(r"^\s{1,3}(\d{2})\s+(\d)\s+(\d{4}).*?\s+(\d)\s+([-FfLl\d.]+)\s+", line)
             if m:
-                rank_boats.append((int(m.group(1)), int(m.group(2)), int(m.group(3))))
+                finish   = int(m.group(1))
+                course   = int(m.group(2))
+                racer_no = int(m.group(3))
+                nyuko    = int(m.group(4))
+                st_str   = m.group(5)
+                try:
+                    if st_str.upper().startswith('F'):
+                        st = -float(st_str[1:]) if len(st_str) > 1 else -0.001
+                    elif st_str.upper().startswith('L'):
+                        st = None
+                    else:
+                        st = float(st_str)
+                except:
+                    st = None
+                rank_boats.append((finish, course, racer_no, nyuko, st))
 
     if current_race_no and rank_boats:
         _save_race(races, results, details, race_date_str, current_venue_code,
@@ -202,17 +216,30 @@ def _save_race(races, results, details, race_date_str, venue_code, race_no,
     })
 
     # result_detail: 選手別着順（全着順）
-    for finish, course, racer_no in rank_boats:
+    # start_detail: 選手別STタイミング
+    for finish, course, racer_no, nyuko, st in rank_boats:
         details.append({
             "race_id":  race_id,
             "racer_no": racer_no,
-            "course":   course,
+            "course":   nyuko,   # 進入コースを使用
             "finish":   finish,
         })
+        if st is not None:
+            details.append({
+                "type":     "start",
+                "race_id":  race_id,
+                "racer_no": racer_no,
+                "course":   nyuko,
+                "st":       st,
+            })
 
 def save_to_supabase(pg_conn, races, results, details):
     if not races:
         return 0
+
+    result_details = [d for d in details if "finish" in d]
+    start_details  = [d for d in details if d.get("type") == "start"]
+
     with pg_conn.cursor() as cur:
         psycopg2.extras.execute_values(cur, """
             INSERT INTO race (race_id,race_date,venue_id,race_no,grade_code,
@@ -228,11 +255,17 @@ def save_to_supabase(pg_conn, races, results, details):
         """, [(r["race_id"],r["rank_1st"],r["rank_2nd"],r["rank_3rd"],
                r["trifecta_pay"],r["is_mansen"]) for r in results])
 
-        if details:
+        if result_details:
             psycopg2.extras.execute_values(cur, """
                 INSERT INTO result_detail (race_id,racer_no,course,finish)
                 VALUES %s ON CONFLICT (race_id,racer_no) DO NOTHING
-            """, [(d["race_id"],d["racer_no"],d["course"],d["finish"]) for d in details])
+            """, [(d["race_id"],d["racer_no"],d["course"],d["finish"]) for d in result_details])
+
+        if start_details:
+            psycopg2.extras.execute_values(cur, """
+                INSERT INTO start_detail (race_id,racer_no,course,st_timing)
+                VALUES %s ON CONFLICT (race_id,racer_no) DO NOTHING
+            """, [(d["race_id"],d["racer_no"],d["course"],d["st"]) for d in start_details])
 
     pg_conn.commit()
     return len(races)
