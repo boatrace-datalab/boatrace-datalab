@@ -160,13 +160,13 @@ def parse_k_file(text, race_date_str):
             continue
 
         if in_data and current_venue_code and current_race_no:
-            m = re.match(r"^\s{1,3}(\d{2})\s+(\d)\s+(\d{4}).*?\s+(\d)\s+([-FfLl\d.]+)\s+", line)
+            m = re.match(r"^\s{1,3}(\d{2})\s+(\d)\s+(\d{4})(.*?)(\d+\.\d+)\s+(\d)\s+([-FfLl]?0\.\d+)", line)
             if m:
                 finish   = int(m.group(1))
                 course   = int(m.group(2))
                 racer_no = int(m.group(3))
-                nyuko    = int(m.group(4))
-                st_str   = m.group(5)
+                nyuko    = int(m.group(6))
+                st_str   = m.group(7)
                 try:
                     if st_str.upper().startswith('F'):
                         st = -float(st_str[1:]) if len(st_str) > 1 else -0.001
