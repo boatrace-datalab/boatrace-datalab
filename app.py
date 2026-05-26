@@ -633,9 +633,9 @@ if show_tab0:
                         or_weight = "bold"    if other_race_display else "normal"
                         recent = get_recent_results(conn, conn_type, int(row['racer_no']), bn, race_id)
                         session_st, yearly_st = get_st_stats(conn, conn_type, int(row['racer_no']), race_id)
-                        session_st_str = f".{int(round(session_st * 100)):02d}" if session_st is not None else "－"
+                        session_st_str = f".{round(session_st, 2):.2f}"[1:] if session_st is not None else "－"
                         yearly_st_val  = yearly_st.get(bn)
-                        yearly_st_str  = f".{int(round(yearly_st_val * 100)):02d}" if yearly_st_val is not None else "－"
+                        yearly_st_str  = f".{round(yearly_st_val, 2):.2f}"[1:] if yearly_st_val is not None else "－"
                         html += f"""<tr style="text-align:center;border-bottom:1px solid #444;">
                             <td style="background:{bg};color:{fg};font-weight:bold;font-size:18px;padding:6px;">{bn}</td>
                             <td style="padding:6px;color:white;">{row['racer_name']}</td>
