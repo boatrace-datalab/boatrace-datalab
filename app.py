@@ -154,7 +154,7 @@ def get_recent_results(conn, conn_type, racer_no, course, current_race_id):
             elif f == 2: return "②"
             elif f == 3: return "③"
             else:        return str(f)
-        return "　".join(fmt(int(f)) for f in df['finish'].tolist())
+        return "　".join(fmt(int(f)) for f in reversed(df['finish'].tolist()))
     except:
         return "－"
 
@@ -600,7 +600,7 @@ if show_tab0:
                             <td style="padding:6px;color:#90EE90;font-size:14px;letter-spacing:2px;">{recent}</td>
                         </tr>"""
                     html += "</table>"
-                    st.caption("※コース別直近10走：直近順（①②③=3着以内、数字=着順）")
+                    st.caption("※コース別直近10走：左が10走前・右が1走前（①=1着　②=2着　③=3着　数字=着順）")
                     st.markdown(html, unsafe_allow_html=True)
 
     except Exception as e:
