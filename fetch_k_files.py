@@ -162,11 +162,12 @@ def parse_k_file(text, race_date_str):
         if in_data and current_venue_code and current_race_no:
             m = re.match(r"^\s{1,3}(\d{2})\s+(\d)\s+(\d{4})(.*?)(\d+\.\d+)\s+(\d)\s+([-FfLl]?0\.\d+)", line)
             if m:
-                finish   = int(m.group(1))
-                course   = int(m.group(2))
-                racer_no = int(m.group(3))
-                nyuko    = int(m.group(6))
-                st_str   = m.group(7)
+                finish      = int(m.group(1))
+                course      = int(m.group(2))
+                racer_no    = int(m.group(3))
+                exhibition  = float(m.group(5))
+                nyuko       = int(m.group(6))
+                st_str      = m.group(7)
                 try:
                     if st_str.upper().startswith('F'):
                         st = -float(st_str[1:]) if len(st_str) > 1 else -0.001
@@ -176,7 +177,7 @@ def parse_k_file(text, race_date_str):
                         st = float(st_str)
                 except:
                     st = None
-                rank_boats.append((finish, course, racer_no, nyuko, st))
+                rank_boats.append((finish, course, racer_no, nyuko, st, exhibition))
 
     if current_race_no and rank_boats:
         _save_race(races, results, details, race_date_str, current_venue_code,
@@ -226,11 +227,12 @@ def _save_race(races, results, details, race_date_str, venue_code, race_no,
         })
         if st is not None:
             details.append({
-                "type":     "start",
-                "race_id":  race_id,
-                "racer_no": racer_no,
-                "course":   nyuko,
-                "st":       st,
+                "type":        "start",
+                "race_id":     race_id,
+                "racer_no":    racer_no,
+                "course":      nyuko,
+                "st":          st,
+                "exhibition":  exhibition,
             })
 
 def save_to_supabase(pg_conn, races, results, details):
@@ -263,9 +265,9 @@ def save_to_supabase(pg_conn, races, results, details):
 
         if start_details:
             psycopg2.extras.execute_values(cur, """
-                INSERT INTO start_detail (race_id,racer_no,course,st_timing)
+                INSERT INTO start_detail (race_id,racer_no,course,st_timing,exhibition_time)
                 VALUES %s ON CONFLICT (race_id,racer_no) DO NOTHING
-            """, [(d["race_id"],d["racer_no"],d["course"],d["st"]) for d in start_details])
+            """, [(d["race_id"],d["racer_no"],d["course"],d["st"],d["exhibition"]) for d in start_details])
 
     pg_conn.commit()
     return len(races)
