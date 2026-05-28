@@ -160,20 +160,24 @@ def get_recent_results(conn, conn_type, racer_no, course, current_race_id):
 
 def get_st_stats(conn, conn_type, racer_no, current_race_id):
     """今節平均ST（全コース）と直近1年コース別平均STを取得"""
-    # 今節のrace_idの日付部分から節の開始を推定（今日から遡って同一venue_idの連続分）
-    # 簡易版：current_race_idの場・直近14日以内を今節とみなす
+    from datetime import datetime, timedelta
     date_str  = str(current_race_id)[:8]   # YYYYMMDD
     venue_str = str(current_race_id)[8:10] # venue_id 2桁
-    race_id_start = int(f"{date_str}{venue_str}01") - 1400000  # 約14日前
 
-    # 今節平均ST（同一venue・直近14日・全コース）
+    # 今節平均ST：同じvenue_id・直近7日以内（節は最大6日）・当該race_id未満
     try:
+        race_date   = datetime.strptime(date_str, "%Y%m%d")
+        session_start = (race_date - timedelta(days=7)).strftime("%Y%m%d")
+        # 同じvenue_idのrace_idの範囲
+        race_id_session_start = int(f"{session_start}{venue_str}00")
+        race_id_venue_end     = int(f"{date_str}{venue_str}99")
         df_session = db_read_sql(f"""
             SELECT AVG(st_timing) as avg_st
             FROM start_detail
             WHERE racer_no = {racer_no}
-            AND race_id >= {race_id_start}
+            AND race_id >= {race_id_session_start}
             AND race_id < {current_race_id}
+            AND SUBSTRING(CAST(race_id AS TEXT), 9, 2) = '{venue_str}'
             AND st_timing >= 0
         """, conn, conn_type)
         session_st = df_session.iloc[0]['avg_st'] if not df_session.empty and df_session.iloc[0]['avg_st'] is not None else None
