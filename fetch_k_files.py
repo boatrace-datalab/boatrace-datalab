@@ -218,7 +218,7 @@ def _save_race(races, results, details, race_date_str, venue_code, race_no,
 
     # result_detail: 選手別着順（全着順）
     # start_detail: 選手別STタイミング
-    for finish, course, racer_no, nyuko, st in rank_boats:
+    for finish, course, racer_no, nyuko, st, exhibition in rank_boats:
         details.append({
             "race_id":  race_id,
             "racer_no": racer_no,
