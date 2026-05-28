@@ -202,6 +202,21 @@ def get_st_stats(conn, conn_type, racer_no, current_race_id):
 
     return session_st, yearly_st
 
+def get_exhibition_stats(conn, conn_type, racer_no, course):
+    """選手のコース別展示期待順位（過去平均）を取得"""
+    try:
+        df = db_read_sql(f"""
+            SELECT avg_ex_rank, std_ex_rank, cnt
+            FROM exhibition_stats
+            WHERE racer_no = {racer_no}
+            AND course = {course}
+        """, conn, conn_type)
+        if df.empty:
+            return None, None
+        return float(df.iloc[0]['avg_ex_rank']), float(df.iloc[0]['std_ex_rank'])
+    except:
+        return None, None
+
 def init_db():
     # judgment_logはローカルSQLiteのみに作成
     try:
@@ -617,6 +632,7 @@ if show_tab0:
                         <th style="padding:6px;">モーターNO</th>
                         <th style="padding:6px;">今節成績</th>
                         <th style="padding:6px;">2回乗り</th>
+                        <th style="padding:6px;">展示期待順位</th>
                         <th style="padding:6px;">今節平均ST</th>
                         <th style="padding:6px;">直近1年ST</th>
                         <th style="padding:6px;">コース別直近10走</th>
@@ -636,6 +652,8 @@ if show_tab0:
                         session_st_str = f".{round(session_st, 2):.2f}"[1:] if session_st is not None else "－"
                         yearly_st_val  = yearly_st.get(bn)
                         yearly_st_str  = f".{round(yearly_st_val, 2):.2f}"[1:] if yearly_st_val is not None else "－"
+                        avg_ex_rank, std_ex_rank = get_exhibition_stats(conn, conn_type, int(row['racer_no']), bn)
+                        ex_rank_str = f"{avg_ex_rank:.1f}位" if avg_ex_rank is not None else "－"
                         html += f"""<tr style="text-align:center;border-bottom:1px solid #444;">
                             <td style="background:{bg};color:{fg};font-weight:bold;font-size:18px;padding:6px;">{bn}</td>
                             <td style="padding:6px;color:white;">{row['racer_name']}</td>
@@ -647,12 +665,13 @@ if show_tab0:
                             <td style="padding:6px;color:white;">{int(row['motor_no'])}</td>
                             <td style="padding:6px;color:white;">{row['session_results']}</td>
                             <td style="padding:6px;color:{or_color};font-weight:{or_weight};">{other_race_display}</td>
+                            <td style="padding:6px;color:#FFA500;">{ex_rank_str}</td>
                             <td style="padding:6px;color:#FFD700;">{session_st_str}</td>
                             <td style="padding:6px;color:#87CEEB;">{yearly_st_str}</td>
                             <td style="padding:6px;color:#90EE90;font-size:14px;letter-spacing:2px;">{recent}</td>
                         </tr>"""
                     html += "</table>"
-                    st.caption("※今節平均ST=今節全コース平均　直近1年ST=艇番コース別平均　コース別直近10走：左が10走前・右が1走前")
+                    st.caption("※展示期待順位=過去の同レース内展示順位平均（低いほど展示が良い傾向）　今節平均ST=今節全コース平均　直近1年ST=艇番コース別平均　コース別直近10走：左が10走前・右が1走前")
                     st.markdown(html, unsafe_allow_html=True)
 
     except Exception as e:
