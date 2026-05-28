@@ -311,7 +311,8 @@ def main():
         dt = datetime.strptime(args.date, "%Y%m%d").replace(tzinfo=JST)
         process_date(dt, pg_conn)
     else:
-        process_date(datetime.now(JST), pg_conn)
+        # 引数なしの場合は前日分を取得（Kファイルは当日レース終了後に確定）
+        process_date(datetime.now(JST) - timedelta(days=1), pg_conn)
 
     pg_conn.close()
     log.info("全完了 ✓")
