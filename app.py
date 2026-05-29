@@ -236,6 +236,34 @@ def get_maekake_stats(conn, conn_type, racer_no, boat_no):
     except:
         return None, None
 
+def get_motor_history(conn, conn_type, venue_id, motor_no, current_date_str):
+    """モーター番号から直近3節分の履歴を取得"""
+    try:
+        df = db_read_sql(f"""
+            SELECT session_start, racer_name, races, wins, top3, results
+            FROM motor_history
+            WHERE venue_id = {venue_id}
+            AND motor_no = {motor_no}
+            AND session_start < '{current_date_str}'
+            ORDER BY session_start DESC
+            LIMIT 3
+        """, conn, conn_type)
+        if df.empty:
+            return []
+        result = []
+        for _, row in df.iterrows():
+            result.append({
+                'session_start': str(row['session_start']),
+                'racer_name':    row['racer_name'],
+                'races':         int(row['races']),
+                'wins':          int(row['wins']),
+                'top3':          int(row['top3']),
+                'results':       row['results'],
+            })
+        return result
+    except:
+        return []
+
 def init_db():
     # judgment_logはローカルSQLiteのみに作成
     try:
@@ -656,6 +684,7 @@ if show_tab0:
                         <th style="padding:6px;">展示期待順位</th>
                         <th style="padding:6px;">今節平均ST</th>
                         <th style="padding:6px;">直近1年ST</th>
+                        <th style="padding:6px;">モーター直近3節</th>
                         <th style="padding:6px;">コース別直近10走</th>
                     </tr>"""
                     for _, row in df_entry.iterrows():
@@ -669,6 +698,17 @@ if show_tab0:
                         or_color  = "#FFD700" if other_race_display else "white"
                         or_weight = "bold"    if other_race_display else "normal"
                         recent = get_recent_results(conn, conn_type, int(row['racer_no']), bn, race_id)
+                        motor_hist = get_motor_history(conn, conn_type, int(selected_venue_id), int(row['motor_no']), today)
+                        if motor_hist:
+                            motor_html = '<br>'.join([
+                                f"<span style='color:#aaa;font-size:10px;'>{h['session_start'][5:]}〜</span> "
+                                f"<span style='color:#FFD700;'>{h['racer_name']}</span> "
+                                f"<span style='color:#90EE90;'>{h['wins']}勝/{h['races']}走</span> "
+                                f"<span style='color:#ccc;font-size:11px;'>{h['results'][:20]}</span>"
+                                for h in motor_hist
+                            ])
+                        else:
+                            motor_html = '<span style="color:#666;">－</span>'
                         session_st, yearly_st = get_st_stats(conn, conn_type, int(row['racer_no']), race_id)
                         session_st_str = f".{round(session_st, 2):.2f}"[1:] if session_st is not None else "－"
                         yearly_st_val  = yearly_st.get(bn)
@@ -704,6 +744,7 @@ if show_tab0:
                             <td style="padding:6px;color:#FFA500;">{ex_rank_str}</td>
                             <td style="padding:6px;color:#FFD700;">{session_st_str}</td>
                             <td style="padding:6px;color:#87CEEB;">{yearly_st_str}</td>
+                            <td style="padding:6px;text-align:left;line-height:1.6;">{motor_html}</td>
                             <td style="padding:6px;color:#90EE90;font-size:14px;letter-spacing:2px;">{recent}</td>
                         </tr>"""
                     html += "</table>"
