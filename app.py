@@ -221,6 +221,21 @@ def get_exhibition_stats(conn, conn_type, racer_no, course):
     except:
         return None, None
 
+def get_maekake_stats(conn, conn_type, racer_no, boat_no):
+    """選手の艇番別前づけ傾向を取得"""
+    try:
+        df = db_read_sql(f"""
+            SELECT maekake_rate, avg_course, cnt
+            FROM maekake_stats
+            WHERE racer_no = {racer_no}
+            AND boat_no = {boat_no}
+        """, conn, conn_type)
+        if df.empty:
+            return None, None
+        return float(df.iloc[0]['maekake_rate']), float(df.iloc[0]['avg_course'])
+    except:
+        return None, None
+
 def init_db():
     # judgment_logはローカルSQLiteのみに作成
     try:
@@ -636,6 +651,8 @@ if show_tab0:
                         <th style="padding:6px;">モーターNO</th>
                         <th style="padding:6px;">今節成績</th>
                         <th style="padding:6px;">2回乗り</th>
+                        <th style="padding:6px;">前づけ<br>傾向</th>
+                        <th style="padding:6px;">前づけ率<br>平均進入</th>
                         <th style="padding:6px;">展示期待順位</th>
                         <th style="padding:6px;">今節平均ST</th>
                         <th style="padding:6px;">直近1年ST</th>
@@ -658,6 +675,19 @@ if show_tab0:
                         yearly_st_str  = f".{round(yearly_st_val, 2):.2f}"[1:] if yearly_st_val is not None else "－"
                         avg_ex_rank, std_ex_rank = get_exhibition_stats(conn, conn_type, int(row['racer_no']), bn)
                         ex_rank_str = f"{avg_ex_rank:.1f}位" if avg_ex_rank is not None else "－"
+                        maekake_rate, avg_course = get_maekake_stats(conn, conn_type, int(row['racer_no']), bn)
+                        if maekake_rate is None:
+                            maekake_tag = "－"
+                            maekake_str = "－"
+                        elif maekake_rate >= 30:
+                            maekake_tag = "🩷前づけ型"
+                            maekake_str = f"{maekake_rate:.0f}% / {avg_course:.1f}コース"
+                        elif maekake_rate <= 5:
+                            maekake_tag = "⚫引き型"
+                            maekake_str = f"{maekake_rate:.0f}% / {avg_course:.1f}コース"
+                        else:
+                            maekake_tag = "🟢枠なり型"
+                            maekake_str = f"{maekake_rate:.0f}% / {avg_course:.1f}コース"
                         html += f"""<tr style="text-align:center;border-bottom:1px solid #444;">
                             <td style="background:{bg};color:{fg};font-weight:bold;font-size:18px;padding:6px;">{bn}</td>
                             <td style="padding:6px;color:white;">{row['racer_name']}</td>
@@ -669,13 +699,15 @@ if show_tab0:
                             <td style="padding:6px;color:white;">{int(row['motor_no'])}</td>
                             <td style="padding:6px;color:white;">{row['session_results']}</td>
                             <td style="padding:6px;color:{or_color};font-weight:{or_weight};">{other_race_display}</td>
+                            <td style="padding:6px;color:white;font-size:12px;">{maekake_tag}</td>
+                            <td style="padding:6px;color:#FF69B4;">{maekake_str}</td>
                             <td style="padding:6px;color:#FFA500;">{ex_rank_str}</td>
                             <td style="padding:6px;color:#FFD700;">{session_st_str}</td>
                             <td style="padding:6px;color:#87CEEB;">{yearly_st_str}</td>
                             <td style="padding:6px;color:#90EE90;font-size:14px;letter-spacing:2px;">{recent}</td>
                         </tr>"""
                     html += "</table>"
-                    st.caption("※展示期待順位=過去の同レース内展示順位平均（低いほど展示が良い傾向）　今節平均ST=今節全コース平均　直近1年ST=艇番コース別平均　コース別直近10走：左が10走前・右が1走前")
+                    st.caption("※前づけ傾向：🩷前づけ型=前づけ率30%以上　🟢枠なり型=5〜30%　⚫引き型=5%以下　展示期待順位=過去の同レース内展示順位平均　今節平均ST=今節全コース平均　直近1年ST=艇番コース別平均")
                     st.markdown(html, unsafe_allow_html=True)
 
     except Exception as e:
